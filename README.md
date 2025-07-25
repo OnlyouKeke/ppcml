@@ -1,80 +1,218 @@
-# Electron + FastAPI + Vue3 应用
+# 🚀 Electron + FastAPI + Vue3 桌面应用
 
-这是一个使用Electron、FastAPI和Vue3构建的桌面应用示例。
+一个现代化的桌面应用，结合了Electron、FastAPI和Vue3的强大功能。应用采用PyInstaller打包方案，实现完全独立的可执行文件，无需用户安装Python环境。
 
-## 项目结构
+## ✨ 特性
+
+- 🖥️ **跨平台桌面应用**：基于Electron构建
+- ⚡ **现代前端技术栈**：Vue3 + TypeScript + Pinia + Arco Design
+- 🐍 **高性能后端API**：FastAPI + Python
+- 📦 **独立打包**：使用PyInstaller，无需Python环境依赖
+- 🔄 **热重载开发**：支持前后端热重载
+- 🛡️ **类型安全**：全面的TypeScript支持
+
+## 📁 项目结构
 
 ```
-├── backend/          # FastAPI后端
-│   └── app/          # 后端应用代码
-│       └── main.py   # 主应用入口
-├── frontend/         # Electron + Vue3前端
-│   ├── electron/     # Electron主进程代码
-│   └── src/          # Vue3应用代码
-└── start.ps1         # 启动脚本
+fastApiProjectByGK/
+├── backend/                    # FastAPI后端
+│   ├── app/
+│   │   └── main.py            # FastAPI应用入口
+│   ├── dist/                  # PyInstaller打包输出
+│   │   └── fastapi-backend.exe # 独立后端可执行文件
+│   ├── pyproject.toml         # Python依赖管理
+│   └── uv.lock               # 依赖锁定文件
+├── frontend/                  # Electron + Vue3前端
+│   ├── electron/              # Electron主进程
+│   │   ├── main.ts           # 主进程入口
+│   │   └── preload.ts        # 预加载脚本
+│   ├── src/                  # Vue3应用源码
+│   │   ├── components/       # Vue组件
+│   │   ├── views/           # 页面视图
+│   │   ├── router/          # 路由配置
+│   │   ├── store/           # 状态管理
+│   │   └── api/             # API接口
+│   ├── resources/           # 资源文件
+│   │   └── fastapi-backend.exe # 后端可执行文件
+│   ├── release/             # 打包输出
+│   │   └── MyElectronApp Setup 1.0.0.exe # 安装包
+│   └── package.json         # 前端依赖配置
+└── README.md               # 项目说明
 ```
 
-## 技术栈
+## 🛠️ 技术栈
 
-- **前端**：Vue3 + TypeScript + Pinia + Arco Design
-- **后端**：FastAPI + Python
-- **桌面应用**：Electron
+### 前端技术
+- **Electron** - 跨平台桌面应用框架
+- **Vue 3** - 渐进式JavaScript框架
+- **TypeScript** - 类型安全的JavaScript超集
+- **Pinia** - Vue状态管理库
+- **Arco Design** - 企业级UI组件库
+- **Vite** - 快速构建工具
 
-## 开发环境要求
+### 后端技术
+- **FastAPI** - 现代高性能Web框架
+- **Python 3.12+** - 编程语言
+- **Uvicorn** - ASGI服务器
+- **PyInstaller** - Python应用打包工具
 
-- Node.js 16+
-- Python 3.12+
-- npm 或 yarn
+### 开发工具
+- **uv** - 快速Python包管理器
+- **electron-builder** - Electron应用打包工具
 
-## 安装依赖
+## 📋 环境要求
 
-### 后端依赖
+### 开发环境
+- **Node.js** 16.0+
+- **Python** 3.12+
+- **uv** (推荐) 或 pip
+- **npm** 或 yarn
+
+### 运行环境（最终用户）
+- **Windows** 10/11 (当前支持)
+- 无需安装Python或Node.js
+
+## 🚀 快速开始
+
+### 1. 克隆项目
+
+```bash
+git clone <repository-url>
+cd fastApiProjectByGK
+```
+
+### 2. 安装后端依赖
 
 ```bash
 cd backend
+# 使用uv (推荐)
+uv sync
+
+# 或使用pip
 pip install -e .
 ```
 
-### 前端依赖
+### 3. 安装前端依赖
 
 ```bash
-cd frontend
+cd ../frontend
 npm install
 ```
 
-## 启动应用
+### 4. 开发模式启动
 
-使用PowerShell启动脚本：
-
+#### 方式一：使用启动脚本
 ```bash
+# 在项目根目录
 ./start.ps1
 ```
 
-这将同时启动FastAPI后端和Electron前端。
+#### 方式二：分别启动
+```bash
+# 终端1：启动后端
+cd backend
+uv run python app/main.py
 
-## 开发指南
+# 终端2：启动前端
+cd frontend
+npm run electron:dev
+```
 
-### 后端开发
+## 📦 生产环境打包
 
-后端使用FastAPI框架，主要代码在`backend/app/main.py`文件中。
-
-### 前端开发
-
-前端使用Vue3 + TypeScript，主要代码在`frontend/src`目录中。
-
-### Electron开发
-
-Electron相关代码在`frontend/electron`目录中。
-
-## 构建应用
+### 完整打包流程
 
 ```bash
-cd frontend
+# 1. 打包后端为独立exe
+cd backend
+uv run pyinstaller --onefile --name fastapi-backend app/main.py
+
+# 2. 复制后端exe到前端资源目录
+cp dist/fastapi-backend.exe ../frontend/resources/
+
+# 3. 构建前端
+cd ../frontend
+npm run build
+
+# 4. 打包Electron应用
 npm run electron:build
 ```
 
-构建后的应用将在`frontend/dist`目录中。
+### 输出文件
+- **安装包**：`frontend/release/MyElectronApp Setup 1.0.0.exe`
+- **便携版**：`frontend/release/win-unpacked/MyElectronApp.exe`
 
-## 许可证
+## 🔧 开发指南
 
-MIT
+### 添加Python依赖
+
+```bash
+cd backend
+# 添加新依赖
+uv add package-name
+
+# 重新打包后端
+uv run pyinstaller --onefile --name fastapi-backend app/main.py
+
+# 复制到前端并重新打包
+cp dist/fastapi-backend.exe ../frontend/resources/
+cd ../frontend
+npm run build
+npm run electron:build
+```
+
+### 添加前端依赖
+
+```bash
+cd frontend
+npm install package-name
+```
+
+### API开发
+
+后端API在 `backend/app/main.py` 中定义：
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/api/example")
+async def example_endpoint():
+    return {"message": "Hello from FastAPI!"}
+```
+
+### 前端API调用
+
+在 `frontend/src/api/` 中定义API接口：
+
+```typescript
+// api/example.ts
+export const getExample = async () => {
+  const response = await fetch('http://localhost:8000/api/example')
+  return response.json()
+}
+```
+
+## 🐛 常见问题
+
+### Q: 打包后的应用无法启动后端？
+A: 确保 `fastapi-backend.exe` 已正确复制到 `frontend/resources/` 目录，并重新打包应用。
+
+### Q: 如何修改应用图标？
+A: 将图标文件放在 `frontend/public/` 目录，并在 `package.json` 的 `build` 配置中指定图标路径。
+
+### Q: 如何支持其他平台？
+A: 需要在对应平台上重新打包，并修改 `main.ts` 中的平台判断逻辑。
+
+## 📄 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📞 联系
+
+如有问题，请提交 Issue 或联系项目维护者。
