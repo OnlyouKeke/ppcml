@@ -1,0 +1,39 @@
+{
+  "appId": "com.example.electron-fastapi-vue",
+  "productName": "Electron FastAPI Vue App",
+  "directories": {
+    "output": "release_new"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "../backend",
+      "to": "backend",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "resources",
+      "to": "resources",
+      "filter": ["**/*"]
+    }
+  ],
+  "win": {
+    "target": ["nsis"],
+    "icon": "public/icon.ico"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "icon": "public/icon.icns"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "icon": "public/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}
