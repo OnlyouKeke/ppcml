@@ -101,16 +101,29 @@ npm install
 
 ### 4. 开发模式启动
 
-#### 启动
+#### 方式一：一键启动（推荐）
 ```bash
-# 终端1：启动后端
+# 直接启动Electron开发模式（自动启动后端）
+cd frontend
+npm run electron:dev
+```
+
+#### 方式二：分别启动
+```bash
+# 终端1：手动启动后端（可选）
 cd backend
-uv run python app/main.py
+python app/main.py
 
 # 终端2：启动前端
 cd frontend
 npm run electron:dev
 ```
+
+#### 🔧 开发模式说明
+- **后端端口**：`http://localhost:8001`（开发模式）
+- **前端端口**：`http://localhost:5174`（Vite开发服务器）
+- **自动启动**：`npm run electron:dev` 会自动启动后端Python脚本
+- **热重载**：前端代码修改会自动刷新，后端修改需重启
 
 ## 📦 生产环境打包
 
@@ -183,12 +196,25 @@ async def example_endpoint():
 ```typescript
 // api/example.ts
 export const getExample = async () => {
-  const response = await fetch('http://localhost:8000/api/example')
+  // 开发模式：http://localhost:8001
+  // 生产模式：http://localhost:8000
+  const response = await fetch('/api/example') // 使用相对路径，自动适配
   return response.json()
 }
 ```
 
+**注意**：项目已配置API代理，使用相对路径即可自动适配开发/生产环境的不同端口。
+
 ## 🐛 常见问题
+
+### Q: 开发模式启动时出现端口冲突？
+A: 项目已配置开发模式使用8001端口，生产模式使用8000端口。如仍有冲突，可在 `backend/app/main.py` 中修改端口配置。
+
+### Q: 开发模式下前后端无法通信？
+A: 确保：
+1. 后端正常启动在8001端口
+2. 前端API配置正确（`frontend/src/api/api.ts`）
+3. 使用相对路径调用API，项目已配置自动代理
 
 ### Q: 打包后的应用无法启动后端？
 A: 确保 `fastapi-backend.exe` 已正确复制到 `frontend/resources/` 目录，并重新打包应用。

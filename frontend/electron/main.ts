@@ -48,21 +48,40 @@ function createWindow() {
 
 // 启动FastAPI后端
 function startFastApi() {
-  // 使用打包的FastAPI exe文件
-  const backendExecutable = isDev 
-    ? join(__dirname, '..', 'resources', 'fastapi-backend.exe')
-    : join(process.resourcesPath, 'fastapi-backend.exe')
-
   console.log('Starting FastAPI backend...')
-  console.log('Executable:', backendExecutable)
-
-  try {
-    // 启动FastAPI后端exe
-    fastApiProcess = spawn(backendExecutable, [], {
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
-  } catch (error) {
-    console.error('Failed to start FastAPI:', error)
+  
+  if (isDev) {
+    // 开发模式：使用 Python 脚本启动
+    const backendDir = join(__dirname, '..', '..', '..', 'backend')
+    const pythonScript = join(backendDir, 'app', 'main.py')
+    
+    console.log('Development mode: Starting Python script')
+    console.log('Backend directory:', backendDir)
+    console.log('Python script:', pythonScript)
+    
+    try {
+        // 使用 Python 直接运行 main.py
+          fastApiProcess = spawn('python', ['app/main.py'], {
+            cwd: backendDir,
+            stdio: ['ignore', 'pipe', 'pipe']
+          })
+      } catch (error) {
+        console.error('Failed to start FastAPI in development mode:', error)
+      }
+  } else {
+    // 生产模式：使用打包的 exe 文件
+    const backendExecutable = join(process.resourcesPath, 'fastapi-backend.exe')
+    
+    console.log('Production mode: Starting packaged executable')
+    console.log('Executable:', backendExecutable)
+    
+    try {
+      fastApiProcess = spawn(backendExecutable, [], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+    } catch (error) {
+      console.error('Failed to start FastAPI in production mode:', error)
+    }
   }
 
   // 处理FastAPI进程的输出

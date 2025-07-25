@@ -7,7 +7,8 @@ const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') 
 // 创建axios实例
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
-  baseURL: isElectron ? 'http://localhost:8000' : '/api',
+  // 开发模式使用8001端口，生产模式使用8000端口
+  baseURL: isElectron ? (process.env.NODE_ENV === 'development' ? 'http://localhost:8001' : 'http://localhost:8000') : '/api',
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json'
