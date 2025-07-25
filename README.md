@@ -68,9 +68,9 @@ fastApiProjectByGK/
 - **uv** (推荐) 或 pip
 - **npm** 或 yarn
 
-### 运行环境（最终用户）
-- **Windows** 10/11 (当前支持)
-- 无需安装Python或Node.js
+### 运行环境
+- **Windows** 10/11
+- **Mac** 
 
 ## 🚀 快速开始
 
@@ -101,13 +101,7 @@ npm install
 
 ### 4. 开发模式启动
 
-#### 方式一：使用启动脚本
-```bash
-# 在项目根目录
-./start.ps1
-```
-
-#### 方式二：分别启动
+#### 启动
 ```bash
 # 终端1：启动后端
 cd backend
