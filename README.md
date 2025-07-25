@@ -78,7 +78,7 @@ fastApiProjectByGK/
 
 ```bash
 git clone <repository-url>
-cd fastApiProjectByGK
+cd electron-fastapi-starter
 ```
 
 ### 2. 安装后端依赖
