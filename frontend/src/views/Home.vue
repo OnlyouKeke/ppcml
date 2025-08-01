@@ -1,49 +1,49 @@
 <template>
   <div class="home-container">
-    <a-card class="card" title="FastAPI 通信测试">
-      <a-space direction="vertical" size="large" fill>
-        <a-alert v-if="mainStore.error" type="error" :content="mainStore.error" />
+    <el-card class="card" header="FastAPI 通信测试">
+      <div class="card-content">
+        <el-alert v-if="mainStore.error" type="error" :title="mainStore.error" show-icon />
         
-        <a-result
+        <el-result
           v-if="mainStore.apiMessage"
-          status="success"
-          :subtitle="mainStore.apiMessage"
+          icon="success"
+          :sub-title="mainStore.apiMessage"
         />
         
-        <a-space direction="vertical">
-          <a-input
+        <div class="input-section">
+          <el-input
             v-model="name"
             placeholder="请输入你的名字"
-            allow-clear
+            clearable
             :disabled="mainStore.loading"
           />
           
-          <a-space>
-            <a-button type="primary" @click="handleHello" :loading="mainStore.loading">
+          <div class="button-group">
+            <el-button type="primary" @click="handleHello" :loading="mainStore.loading">
               获取问候
-            </a-button>
+            </el-button>
             
-            <a-button @click="handleRoot" :loading="mainStore.loading">
+            <el-button @click="handleRoot" :loading="mainStore.loading">
               获取根路径数据
-            </a-button>
+            </el-button>
             
-            <a-button status="danger" @click="mainStore.resetState">
+            <el-button type="danger" @click="mainStore.resetState">
               重置
-            </a-button>
-          </a-space>
-        </a-space>
+            </el-button>
+          </div>
+        </div>
         
-        <a-divider />
+        <el-divider />
         
         <div class="info-section">
           <h3>Electron + FastAPI + Vue3 通信架构</h3>
           <p>这是一个使用 Electron、FastAPI 和 Vue3 构建的应用程序示例。</p>
-          <p>前端使用 Vue3 + TypeScript + Pinia + Arco Design 构建。</p>
+          <p>前端使用 Vue3 + TypeScript + Pinia + Element Plus 构建。</p>
           <p>后端使用 FastAPI 提供 API 服务。</p>
           <p>Electron 负责将两者整合为桌面应用。</p>
         </div>
-      </a-space>
-    </a-card>
+      </div>
+    </el-card>
   </div>
 </template>
 
@@ -73,25 +73,60 @@ const handleRoot = () => {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 20px;
+  padding: 0;
+  height: 100%;
 }
 
 .card {
   width: 100%;
-  max-width: 600px;
+  max-width: 800px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  margin-bottom: 20px;
+}
+
+.card :deep(.el-card__header) {
+  background-color: #f0f5ff;
+  color: #1890ff;
+  font-weight: bold;
+  border-bottom: 1px solid #e6f7ff;
+}
+
+.card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 10px 0;
+}
+
+.input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 5px;
 }
 
 .info-section {
-  margin-top: 20px;
-  color: var(--color-text-2);
+  margin-top: 10px;
+  color: #606266;
+  background-color: #fafafa;
+  padding: 15px;
+  border-radius: 4px;
 }
 
 .info-section h3 {
   margin-bottom: 10px;
-  color: var(--color-text-1);
+  color: #303133;
+  font-size: 16px;
 }
 
 .info-section p {
   margin: 5px 0;
+  line-height: 1.6;
 }
 </style>

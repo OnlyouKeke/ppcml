@@ -23,7 +23,8 @@ function createWindow() {
       contextIsolation: true
     }
   })
-
+  //隐藏菜单栏
+  mainWindow.setMenu(null);
   // 加载应用
   if (isDev) {
     // 开发环境下，加载Vite开发服务器

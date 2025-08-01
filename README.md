@@ -5,7 +5,7 @@
 ## ✨ 特性
 
 - 🖥️ **跨平台桌面应用**：基于Electron构建
-- ⚡ **现代前端技术栈**：Vue3 + TypeScript + Pinia + Arco Design
+- ⚡ **现代前端技术栈**：Vue3 + TypeScript + Pinia + Element Plus
 - 🐍 **高性能后端API**：FastAPI + Python
 - 📦 **独立打包**：使用PyInstaller，无需Python环境依赖
 - 🔄 **热重载开发**：支持前后端热重载
@@ -47,8 +47,10 @@ fastApiProjectByGK/
 - **Vue 3** - 渐进式JavaScript框架
 - **TypeScript** - 类型安全的JavaScript超集
 - **Pinia** - Vue状态管理库
-- **Arco Design** - 企业级UI组件库
+- **Element Plus** - 基于Vue 3的企业级UI组件库
 - **Vite** - 快速构建工具
+
+> **UI组件库说明**：项目最初采用Arco Design，但在开发过程中发现存在较多bug和兼容性问题，因此替换为更稳定、功能更完善的Element Plus组件库。Element Plus提供了更丰富的组件和更好的TypeScript支持，大大提升了开发效率和用户体验。
 
 ### 后端技术
 - **FastAPI** - 现代高性能Web框架
@@ -175,6 +177,21 @@ cd frontend
 npm install package-name
 ```
 
+### 关于页面
+
+应用包含一个「关于」页面，展示应用的技术栈和架构信息：
+
+- **技术栈展示**：列出前后端使用的主要技术
+- **架构说明**：展示应用的分层架构和通信流程
+- **版本信息**：显示当前应用版本
+
+> **重要说明**：项目已决定从Arco Design迁移到Element Plus，但前端代码尚未完全更新。需要进行以下更新：
+> 1. 在`package.json`中添加Element Plus依赖：`npm install element-plus`
+> 2. 更新`main.ts`中的组件库导入
+> 3. 将`About.vue`等组件中的Arco Design组件替换为Element Plus组件
+> 
+> 迁移指南可参考[Element Plus官方文档](https://element-plus.org/zh-CN/)
+
 ### API开发
 
 后端API在 `backend/app/main.py` 中定义：
@@ -205,6 +222,52 @@ export const getExample = async () => {
 
 **注意**：项目已配置API代理，使用相对路径即可自动适配开发/生产环境的不同端口。
 
+## 🔄 从Arco Design迁移到Element Plus
+
+### 迁移步骤
+
+1. **安装Element Plus**
+   ```bash
+   cd frontend
+   npm install element-plus
+   # 安装图标库（可选）
+   npm install @element-plus/icons-vue
+   ```
+
+2. **更新主入口文件**
+   修改 `frontend/src/main.ts`：
+   ```typescript
+   // 替换
+   import ArcoVue from '@arco-design/web-vue'
+   import '@arco-design/web-vue/dist/arco.css'
+   // 为
+   import ElementPlus from 'element-plus'
+   import 'element-plus/dist/index.css'
+   // 使用
+   app.use(ElementPlus)
+   ```
+
+3. **组件替换对照表**
+   | Arco Design | Element Plus |
+   |------------|-------------|
+   | `<a-button>` | `<el-button>` |
+   | `<a-input>` | `<el-input>` |
+   | `<a-card>` | `<el-card>` |
+   | `<a-menu>` | `<el-menu>` |
+   | `<a-table>` | `<el-table>` |
+   | `<a-form>` | `<el-form>` |
+
+4. **样式变量替换**
+   Element Plus使用CSS变量，需要更新样式引用。
+
+5. **图标替换**
+   从`@arco-design/web-vue/es/icon`替换为`@element-plus/icons-vue`
+
+### 迁移注意事项
+- 组件API可能有差异，请参考[Element Plus文档](https://element-plus.org/zh-CN/component/button.html)
+- 主题定制方式不同
+- 部分组件名称和属性需要调整
+
 ## 🐛 常见问题
 
 ### Q: 开发模式启动时出现端口冲突？
@@ -215,6 +278,9 @@ A: 确保：
 1. 后端正常启动在8001端口
 2. 前端API配置正确（`frontend/src/api/api.ts`）
 3. 使用相对路径调用API，项目已配置自动代理
+
+### Q: UI组件显示异常？
+A: 可能是由于从Arco Design迁移到Element Plus过程中的组件替换不完全。请检查组件名称、属性和样式是否正确更新。
 
 ### Q: 打包后的应用无法启动后端？
 A: 确保 `fastapi-backend.exe` 已正确复制到 `frontend/resources/` 目录，并重新打包应用。
