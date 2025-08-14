@@ -10,6 +10,7 @@
 - 📦 **独立打包**：使用PyInstaller，无需Python环境依赖
 - 🔄 **热重载开发**：支持前后端热重载
 - 🛡️ **类型安全**：全面的TypeScript支持
+- 🔒 **安全启动机制**：后端只能通过前端启动，防止独立执行
 
 ## 📁 项目结构
 
@@ -107,18 +108,8 @@ npm install
 ```bash
 # 直接启动Electron开发模式（自动启动后端）
 cd frontend
-npm run electron:dev
+npm run dev 或者 npm run electron:dev
 ```
-
-#### 方式二：分别启动
-```bash
-# 终端1：手动启动后端（可选）
-cd backend
-python app/main.py
-
-# 终端2：启动前端
-cd frontend
-npm run electron:dev
 
 ```
 
@@ -214,6 +205,17 @@ export const getExample = async () => {
 
 **注意**：项目已配置API代理，使用相对路径即可自动适配开发/生产环境的不同端口。
 
+### 安全启动机制
+
+项目实现了安全启动机制，确保后端只能通过前端启动：
+
+1. **Token生成**：前端启动时生成带时间戳的安全token
+2. **环境变量传递**：通过环境变量 `FASTAPI_STARTUP_TOKEN` 传递给后端
+3. **后端验证**：后端启动时验证token的有效性和时效性（60秒内有效）
+4. **安全退出**：如果验证失败，后端会自动退出
+
+这种机制防止用户直接运行后端可执行文件，确保应用的完整性和安全性。
+
 ## 🐛 常见问题
 
 ### Q: 开发模式启动时出现端口冲突？
@@ -230,6 +232,12 @@ A: 可能是由于从Arco Design迁移到Element Plus过程中的组件替换不
 
 ### Q: 打包后的应用无法启动后端？
 A: 确保 `fastapi-backend.exe` 已正确复制到 `frontend/resources/` 目录，并重新打包应用。
+
+### Q: 后端提示"缺少启动token"错误？
+A: 这是正常的安全机制。后端只能通过前端Electron应用启动，不能独立运行。如需独立测试后端，可以临时注释掉 `main.py` 中的 `verify_startup_token()` 调用。
+
+### Q: 如何禁用安全启动机制？
+A: 在 `backend/app/main.py` 中注释掉 `verify_startup_token()` 这一行即可。但不推荐在生产环境中禁用此机制。
 
 ### Q: 如何修改应用图标？
 A: 将图标文件放在 `frontend/public/` 目录，并在 `package.json` 的 `build` 配置中指定图标路径。

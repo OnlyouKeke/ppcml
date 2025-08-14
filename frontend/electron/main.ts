@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { spawn, ChildProcess } from 'child_process'
 import { platform } from 'os'
+import { createHash } from 'crypto'
 
 // 是否是开发环境
 const isDev = process.env.NODE_ENV === 'development'
@@ -11,6 +12,13 @@ let fastApiProcess: ChildProcess | null = null
 
 // 主窗口
 let mainWindow: BrowserWindow | null = null
+
+// 生成启动token
+function generateStartupToken(): string {
+  const timestamp = Math.floor(Date.now() / 1000)
+  const hash = createHash('sha256').update(`fastapi_startup_${timestamp}`).digest('hex').substring(0, 16)
+  return `${timestamp}_${hash}`
+}
 
 // 创建主窗口
 function createWindow() {
@@ -51,6 +59,16 @@ function createWindow() {
 function startFastApi() {
   console.log('Starting FastAPI backend...')
   
+  // 生成启动token
+  const startupToken = generateStartupToken()
+  console.log('Generated startup token for backend verification')
+  
+  // 设置环境变量
+  const env = {
+    ...process.env,
+    FASTAPI_STARTUP_TOKEN: startupToken
+  }
+  
   if (isDev) {
     // 开发模式：使用 Python 脚本启动
     const backendDir = join(__dirname, '..', '..', '..', 'backend')
@@ -61,10 +79,11 @@ function startFastApi() {
     console.log('Python script:', pythonScript)
     
     try {
-        // 使用 Python 直接运行 main.py
+        // 使用 Python 直接运行 main.py，传递环境变量
           fastApiProcess = spawn('python', ['app/main.py'], {
             cwd: backendDir,
-            stdio: ['ignore', 'pipe', 'pipe']
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: env
           })
       } catch (error) {
         console.error('Failed to start FastAPI in development mode:', error)
@@ -78,7 +97,8 @@ function startFastApi() {
     
     try {
       fastApiProcess = spawn(backendExecutable, [], {
-        stdio: ['ignore', 'pipe', 'pipe']
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: env
       })
     } catch (error) {
       console.error('Failed to start FastAPI in production mode:', error)
