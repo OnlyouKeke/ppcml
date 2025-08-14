@@ -119,7 +119,14 @@ python app/main.py
 # 终端2：启动前端
 cd frontend
 npm run electron:dev
+
 ```
+
+![image-20250814103934562](D:\GK\fastApiProjectByGK\assets\image-20250814103934562.png)
+
+![image-20250814104005242](D:\GK\fastApiProjectByGK\assets\image-20250814104005242.png)
+
+![image-20250814104014415](D:\GK\fastApiProjectByGK\assets\image-20250814104014415.png)
 
 #### 🔧 开发模式说明
 - **后端端口**：`http://localhost:8001`（开发模式）
@@ -177,21 +184,6 @@ cd frontend
 npm install package-name
 ```
 
-### 关于页面
-
-应用包含一个「关于」页面，展示应用的技术栈和架构信息：
-
-- **技术栈展示**：列出前后端使用的主要技术
-- **架构说明**：展示应用的分层架构和通信流程
-- **版本信息**：显示当前应用版本
-
-> **重要说明**：项目已决定从Arco Design迁移到Element Plus，但前端代码尚未完全更新。需要进行以下更新：
-> 1. 在`package.json`中添加Element Plus依赖：`npm install element-plus`
-> 2. 更新`main.ts`中的组件库导入
-> 3. 将`About.vue`等组件中的Arco Design组件替换为Element Plus组件
-> 
-> 迁移指南可参考[Element Plus官方文档](https://element-plus.org/zh-CN/)
-
 ### API开发
 
 后端API在 `backend/app/main.py` 中定义：
@@ -221,52 +213,6 @@ export const getExample = async () => {
 ```
 
 **注意**：项目已配置API代理，使用相对路径即可自动适配开发/生产环境的不同端口。
-
-## 🔄 从Arco Design迁移到Element Plus
-
-### 迁移步骤
-
-1. **安装Element Plus**
-   ```bash
-   cd frontend
-   npm install element-plus
-   # 安装图标库（可选）
-   npm install @element-plus/icons-vue
-   ```
-
-2. **更新主入口文件**
-   修改 `frontend/src/main.ts`：
-   ```typescript
-   // 替换
-   import ArcoVue from '@arco-design/web-vue'
-   import '@arco-design/web-vue/dist/arco.css'
-   // 为
-   import ElementPlus from 'element-plus'
-   import 'element-plus/dist/index.css'
-   // 使用
-   app.use(ElementPlus)
-   ```
-
-3. **组件替换对照表**
-   | Arco Design | Element Plus |
-   |------------|-------------|
-   | `<a-button>` | `<el-button>` |
-   | `<a-input>` | `<el-input>` |
-   | `<a-card>` | `<el-card>` |
-   | `<a-menu>` | `<el-menu>` |
-   | `<a-table>` | `<el-table>` |
-   | `<a-form>` | `<el-form>` |
-
-4. **样式变量替换**
-   Element Plus使用CSS变量，需要更新样式引用。
-
-5. **图标替换**
-   从`@arco-design/web-vue/es/icon`替换为`@element-plus/icons-vue`
-
-### 迁移注意事项
-- 组件API可能有差异，请参考[Element Plus文档](https://element-plus.org/zh-CN/component/button.html)
-- 主题定制方式不同
-- 部分组件名称和属性需要调整
 
 ## 🐛 常见问题
 
