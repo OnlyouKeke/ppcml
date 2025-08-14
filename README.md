@@ -122,11 +122,11 @@ npm run electron:dev
 
 ```
 
-![image-20250814103934562](D:\GK\fastApiProjectByGK\assets\image-20250814103934562.png)
+![image-20250814103934562](./assets/image-20250814103934562.png)
 
-![image-20250814104005242](D:\GK\fastApiProjectByGK\assets\image-20250814104005242.png)
+![image-20250814104005242](./assets/image-20250814104005242.png)
 
-![image-20250814104014415](D:\GK\fastApiProjectByGK\assets\image-20250814104014415.png)
+![image-20250814104014415](./assets/image-20250814104014415.png)
 
 #### 🔧 开发模式说明
 - **后端端口**：`http://localhost:8001`（开发模式）
