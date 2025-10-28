@@ -106,4 +106,12 @@ async def detect_objects(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+
+    port_str = os.environ.get("FASTAPI_PORT", "8001")
+    try:
+        port = int(port_str)
+    except ValueError:
+        print(f"警告：FASTAPI_PORT 设置无效（{port_str}），使用默认端口 8001")
+        port = 8001
+
+    uvicorn.run(app, host="0.0.0.0", port=port)

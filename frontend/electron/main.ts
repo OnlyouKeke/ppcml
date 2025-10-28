@@ -13,6 +13,9 @@ let fastApiProcess: ChildProcess | null = null
 // 主窗口
 let mainWindow: BrowserWindow | null = null
 
+// 后端端口
+const backendPort = isDev ? 8001 : 8000
+
 // 生成启动token
 function generateStartupToken(): string {
   const timestamp = Math.floor(Date.now() / 1000)
@@ -66,7 +69,8 @@ function startFastApi() {
   // 设置环境变量
   const env = {
     ...process.env,
-    FASTAPI_STARTUP_TOKEN: startupToken
+    FASTAPI_STARTUP_TOKEN: startupToken,
+    FASTAPI_PORT: backendPort.toString()
   }
   
   if (isDev) {
