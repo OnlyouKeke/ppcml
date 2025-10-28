@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getHello, getRoot, postDetect } from '../api/api'
-import type { Detection } from '../types/api'
+import type { ApiResponse, Detection } from '../types/api'
 
 // 创建主存储
 export const useMainStore = defineStore('main', () => {

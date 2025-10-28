@@ -1,5 +1,3 @@
-"""YOLO 预测相关的工具函数。"""
-
 from __future__ import annotations
 
 import asyncio
@@ -18,8 +16,8 @@ except ImportError as exc:  # pragma: no cover - import guard for clearer messag
 
 def _load_model() -> YOLO:
     """加载YOLO模型，优先使用环境变量指定的模型权重。"""
-    model_name = os.getenv("YOLO_MODEL_NAME", "yolov8n.pt")
-    model_path = Path(model_name)
+    #model_name = os.getenv("..\model\yolo12n.pt", "..\model\yolov8n.pt")
+    model_path = Path("..\model\yolo12n.pt", "..\model\yolov8n.pt")
     if not model_path.exists():
         # 让ultralytics在首次调用时自动下载官方模型权重
         model = YOLO(model_name)
