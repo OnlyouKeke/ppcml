@@ -27,7 +27,7 @@ const router = createRouter({
 })
 
 // 路由前置守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   // 设置页面标题
   document.title = `${to.meta.title || '首页'} - Electron + FastAPI + Vue3`
   next()
