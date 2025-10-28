@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { ApiResponse } from '../store'
+import type { ApiResponse, DetectionResponse } from '../types/api'
 
 // 判断是否在Electron环境中
 const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') > -1
@@ -8,7 +8,11 @@ const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') 
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
   // 开发模式使用8001端口，生产模式使用8000端口
-  baseURL: isElectron ? (process.env.NODE_ENV === 'development' ? 'http://localhost:8001' : 'http://localhost:8000') : '/api',
+  baseURL: isElectron
+    ? process.env.NODE_ENV === 'development'
+      ? 'http://localhost:8001'
+      : 'http://localhost:8000'
+    : '/api',
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json'
@@ -57,6 +61,18 @@ export const getRoot = async (): Promise<ApiResponse> => {
 // 获取问候数据
 export const getHello = async (name: string): Promise<ApiResponse> => {
   return await api.get(`/hello/${name}`)
+}
+
+// 上传图片并进行目标检测
+export const postDetect = async (file: File): Promise<DetectionResponse> => {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return await api.post('/detect', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
 }
 
 export default api

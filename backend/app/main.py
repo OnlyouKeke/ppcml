@@ -9,7 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .predict import predict_image_bytes
 
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+
+from .predict import predict_image_bytes
 
 # 验证启动token
 def verify_startup_token():
@@ -65,6 +70,22 @@ async def root():
 @app.get("/hello/{name}")
 async def say_hello(name: str):
     return {"message": f"Hello {name}"}
+
+@app.post("/detect")
+async def detect_objects(file: UploadFile = File(...)):
+    if file.content_type is None or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="仅支持图片文件上传")
+
+    suffix = Path(file.filename or "upload").suffix
+
+    try:
+        contents = await file.read()
+        if not contents:
+            raise HTTPException(status_code=400, detail="上传文件内容为空")
+        detections = await predict_image_bytes(contents, suffix=suffix)
+        return {"detections": detections}
+    finally:
+        await file.close()
 
 @app.post("/detect")
 async def detect_objects(file: UploadFile = File(...)):
