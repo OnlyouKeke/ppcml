@@ -1,6 +1,8 @@
 import axios from 'axios'
 import type { ApiResponse, DetectionResponse } from '../types/api'
 
+type FileWithRelativePath = File & { webkitRelativePath?: string }
+
 // 判断是否在Electron环境中
 const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') > -1
 
@@ -72,6 +74,50 @@ export const postDetect = async (file: File): Promise<DetectionResponse> => {
     headers: {
       'Content-Type': 'multipart/form-data'
     }
+  })
+}
+
+interface CtcReportPayload {
+  files: FileWithRelativePath[]
+  form: {
+    petName: string
+    ownerName: string
+    age: string
+    gender: string
+    species: string
+    notes: string
+    sampleType?: string
+    massLocation?: string
+  }
+  roundnessThreshold?: number
+}
+
+export const postGenerateCtcReport = async ({
+  files,
+  form,
+  roundnessThreshold = 0.3
+}: CtcReportPayload): Promise<Blob> => {
+  const formData = new FormData()
+  files.forEach(file => {
+    const relativePath = (file as FileWithRelativePath).webkitRelativePath || file.name
+    formData.append('files', file, relativePath)
+  })
+
+  formData.append('petName', form.petName || '')
+  formData.append('ownerName', form.ownerName || '')
+  formData.append('age', form.age || '')
+  formData.append('gender', form.gender || '')
+  formData.append('species', form.species || '')
+  formData.append('notes', form.notes || '')
+  formData.append('sampleType', form.sampleType || '')
+  formData.append('massLocation', form.massLocation || '')
+  formData.append('roundnessThreshold', String(roundnessThreshold))
+
+  return await api.post('/ctc/report', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    },
+    responseType: 'blob'
   })
 }
 
