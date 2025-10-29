@@ -43,20 +43,23 @@
                   ref="fileInputRef"
                   class="upload-input"
                   type="file"
-                  accept="image/*"
-                  @change="handleFileChange"
+                  webkitdirectory
+                  multiple
+                  @change="handleFolderChange"
                 />
                 <el-button
                   type="primary"
                   plain
-                  :disabled="!selectedFile"
+                  :disabled="!selectedFiles.length"
                   :loading="isDetecting"
                   @click="runDetection"
                 >
-                  {{ isDetecting ? '识别中...' : '识别图片' }}
+                  {{ isDetecting ? '生成中...' : '生成报告' }}
                 </el-button>
-                <div v-if="selectedFile" class="file-name">{{ selectedFile.name }}</div>
-                <div v-else class="upload-tip">请选择需要识别的影像图片，支持常见图片格式</div>
+                <div v-if="selectedFiles.length" class="file-name">
+                  {{ selectedFolderName || '已选文件夹' }}（{{ folderFileCount }} 个文件）
+                </div>
+                <div v-else class="upload-tip">请选择包含五个通道的影像文件夹</div>
               </div>
             </el-form-item>
           </el-form>
@@ -105,8 +108,10 @@
 <script lang="ts" setup>
 import { ElMessage } from 'element-plus'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { postDetect } from '../api/api'
+import { postGenerateCtcReport } from '../api/api'
 import type { Detection } from '../types/api'
+
+type FileWithRelativePath = File & { webkitRelativePath?: string }
 
 interface FormState {
   petName: string
@@ -126,12 +131,15 @@ const form = reactive<FormState>({
   notes: ''
 })
 
-const selectedFile = ref<File | null>(null)
+const selectedFiles = ref<FileWithRelativePath[]>([])
+const selectedFolderName = ref('')
+const folderFileCount = ref(0)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const imageSrc = ref('')
 const detections = ref<Detection[]>([])
 const isDetecting = ref(false)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const roundnessThreshold = ref(0.3)
 
 const hasReport = computed(() => Boolean(imageSrc.value))
 
@@ -144,51 +152,106 @@ const detectionTable = computed(() =>
   }))
 )
 
-const handleFileChange = async (event: Event) => {
+const expectedChannels = ['1', '2', '3', '4', '5']
+
+const resetSelectedFolder = () => {
+  selectedFiles.value = []
+  selectedFolderName.value = ''
+  folderFileCount.value = 0
+}
+
+const handleFolderChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
+  resetSelectedFolder()
+
   if (!files || !files.length) {
     return
   }
 
-  const file = files[0]
-  if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
+  const fileArray = Array.from(files) as FileWithRelativePath[]
+  const validFiles = fileArray.filter(item => item.name !== '.DS_Store')
+
+  if (!validFiles.length) {
+    ElMessage.error('所选文件夹中没有有效的影像文件')
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
     return
   }
 
-  selectedFile.value = file
-  detections.value = []
+  const channelSet = new Set<string>()
+  validFiles.forEach(file => {
+    const relativePath = file.webkitRelativePath || file.name
+    relativePath
+      .split('/')
+      .filter(Boolean)
+      .forEach(part => {
+        if (expectedChannels.includes(part)) {
+          channelSet.add(part)
+        }
+      })
+  })
 
-  const reader = new FileReader()
-  reader.onload = () => {
-    imageSrc.value = typeof reader.result === 'string' ? reader.result : ''
-    scheduleRender()
+  const missingChannels = expectedChannels.filter(channel => !channelSet.has(channel))
+  if (missingChannels.length) {
+    ElMessage.error(`所选文件夹缺少通道：${missingChannels.join('、')}`)
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
+    return
   }
-  reader.readAsDataURL(file)
+
+  const firstPath = validFiles[0].webkitRelativePath || validFiles[0].name
+  const rootName = firstPath.split('/').filter(Boolean)[0] || validFiles[0].name
+
+  selectedFiles.value = validFiles
+  selectedFolderName.value = rootName
+  folderFileCount.value = validFiles.length
+  detections.value = []
+  imageSrc.value = ''
+  scheduleRender()
 }
 
 const runDetection = async () => {
-  if (!selectedFile.value) {
-    ElMessage.warning('请先选择需要识别的图片')
+  if (!selectedFiles.value.length) {
+    ElMessage.warning('请先选择包含影像的文件夹')
     return
   }
 
   try {
     isDetecting.value = true
-    const response = await postDetect(selectedFile.value)
-    detections.value = response.detections || []
-    if (detections.value.length) {
-      ElMessage.success('识别完成，已生成检测结果')
-    } else {
-      ElMessage.info('识别完成，未检测到明显目标')
-    }
+    const blob = await postGenerateCtcReport({
+      files: selectedFiles.value,
+      form: {
+        petName: form.petName,
+        ownerName: form.ownerName,
+        age: form.age,
+        gender: form.gender,
+        species: form.species,
+        notes: form.notes,
+        sampleType: '',
+        massLocation: ''
+      },
+      roundnessThreshold: roundnessThreshold.value
+    })
+
+    const downloadName = `${selectedFolderName.value || 'ctc_dataset'}-report.docx`
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = downloadName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+
+    ElMessage.success('报告生成成功，已开始下载')
   } catch (error) {
     console.error(error)
-    ElMessage.error('识别失败，请稍后重试')
+    ElMessage.error('生成报告失败，请稍后重试')
   } finally {
     isDetecting.value = false
-    scheduleRender()
   }
 }
 
@@ -201,7 +264,7 @@ const resetAll = () => {
   form.notes = ''
   detections.value = []
   imageSrc.value = ''
-  selectedFile.value = null
+  resetSelectedFolder()
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
   }
@@ -293,7 +356,7 @@ const drawPlaceholder = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2
   ctx.fillStyle = '#9ca3af'
   ctx.font = '20px "Microsoft YaHei", sans-serif'
   ctx.textAlign = 'center'
-  ctx.fillText('请完善宠物信息并上传影像图片，生成检测报告', canvas.width / 2, canvas.height / 2)
+  ctx.fillText('请完善宠物信息并上传影像文件夹，生成检测报告', canvas.width / 2, canvas.height / 2)
   ctx.textAlign = 'left'
 }
 
