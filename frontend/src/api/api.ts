@@ -6,31 +6,12 @@ type FileWithRelativePath = File & { webkitRelativePath?: string }
 const runtime = window.appRuntime
 const isElectron = Boolean(runtime?.isElectron)
 const backendUrl = runtime?.backend?.url
-const backendHost = runtime?.backend?.host
-const backendPortFromRuntime = runtime?.backend?.port
 
 const fallbackPort = process.env.NODE_ENV === 'development' ? '8001' : '8000'
 const defaultBackendUrl = `http://127.0.0.1:${fallbackPort}`
 
 // 创建axios实例
 console.info('[API] Running in electron:', isElectron)
-console.info('[API] Renderer location origin:', window.location.origin)
-console.info('[API] Runtime metadata:', runtime)
-
-if (isElectron) {
-  if (backendUrl) {
-    console.info('[API] Using backend URL from runtime metadata:', backendUrl)
-  } else {
-    console.warn('[API] Backend URL missing from runtime metadata, falling back to default URL', {
-      backendHost,
-      backendPort: backendPortFromRuntime,
-      defaultBackendUrl
-    })
-  }
-} else {
-  console.info('[API] Non-electron environment detected, using relative API proxy')
-}
-
 console.info('[API] Backend URL resolved to:', isElectron ? backendUrl ?? defaultBackendUrl : '/api')
 
 const api = axios.create({
