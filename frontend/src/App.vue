@@ -1,79 +1,33 @@
 <template>
   <el-config-provider>
-    <div class="app-container">
-      <el-container>
-        <el-aside width="220px" class="sidebar">
-          <div class="logo">Electron + FastAPI + Vue3</div>
-          <el-menu
-            mode="vertical"
-            :default-active="activeRoute"
-            @select="handleMenuClick"
-            class="sidebar-menu"
-            background-color="#f5f7fa"
-            text-color="#303133"
-            active-text-color="#1890ff"
-          >
-            <el-menu-item index="home">
-              <el-icon><House /></el-icon>
-              <span>首页</span>
-            </el-menu-item>
-            <el-menu-item index="about">
-              <el-icon><InfoFilled /></el-icon>
-              <span>关于</span>
-            </el-menu-item>
-          </el-menu>
-        </el-aside>
-        
-        <el-container>
-          <el-main class="content">
-            <router-view />
-          </el-main>
-          
-          <el-footer class="footer">
-            Electron + FastAPI + Vue3 示例应用 &copy; {{ new Date().getFullYear() }}
-          </el-footer>
-        </el-container>
-      </el-container>
+    <div class="app-shell">
+      <header class="app-header">
+        <h1 class="app-title">宠物检测报告系统</h1>
+        <p class="app-subtitle">整合宠物信息与识别结果，一键生成专业报告</p>
+      </header>
+      <main class="app-main">
+        <router-view />
+      </main>
+      <footer class="app-footer">© {{ new Date().getFullYear() }} 宠物健康智能分析中心</footer>
     </div>
   </el-config-provider>
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { House, InfoFilled } from '@element-plus/icons-vue'
-
-const router = useRouter()
-const route = useRoute()
-
-// 当前活动路由
-const activeRoute = computed(() => {
-  return route.name
-})
-
-// 处理菜单点击
-const handleMenuClick = (key: string) => {
-  console.log('菜单点击:', key)
-  router.push({ name: key })
-}
+import { onMounted } from 'vue'
 
 onMounted(() => {
-  console.log('应用已加载')
+  console.log('宠物检测报告系统已启动')
 })
 </script>
 
 <style>
-/* 全局样式 */
 :root {
-  --primary-color: #1890ff;
-  --primary-light: #e6f7ff;
-  --text-primary: #303133;
-  --text-secondary: #606266;
-  --text-tertiary: #909399;
-  --border-color: #e6e6e6;
-  --bg-color: #f5f7fa;
-  --bg-white: #ffffff;
-  --shadow-light: 0 2px 8px rgba(0, 0, 0, 0.05);
+  --bg-gradient-start: #f1f5f9;
+  --bg-gradient-end: #e0e7ff;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --panel-background: rgba(255, 255, 255, 0.92);
 }
 
 * {
@@ -82,120 +36,62 @@ onMounted(() => {
   box-sizing: border-box;
 }
 
+html,
+body,
+#app {
+  height: 100%;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
   color: var(--text-primary);
-  background-color: var(--bg-white);
+  background: linear-gradient(180deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
 }
 
-/* 自定义滚动条 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-.app-container {
-  height: 100vh;
-  width: 100%;
+.app-shell {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(16px);
 }
 
-.sidebar {
-  background-color: #f5f7fa;
-  height: 100vh;
-  overflow-x: hidden;
-  transition: width 0.3s;
-  border-right: 1px solid #e6e6e6;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-.logo {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: bold;
-  color: #1890ff;
-  background-color: #f0f5ff;
-  padding: 0 10px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-bottom: 1px solid #e6e6e6;
-}
-
-.sidebar-menu {
-  border-right: none;
-  height: calc(100vh - 60px);
-}
-
-.sidebar-menu :deep(.el-menu-item) {
-  height: 50px;
-  line-height: 50px;
-  margin: 4px 0;
-  border-radius: 4px;
-  margin-right: 8px;
-  margin-left: 8px;
-}
-
-.sidebar-menu :deep(.el-menu-item.is-active) {
-  background-color: #e6f7ff;
-  color: #1890ff;
-  font-weight: 500;
-}
-
-.sidebar-menu :deep(.el-menu-item:hover) {
-  background-color: #f0f5ff;
-}
-
-.sidebar-menu :deep(.el-icon) {
-  margin-right: 10px;
-  font-size: 18px;
-}
-
-.content {
-  padding: 20px;
-  background-color: #ffffff;
-  min-height: calc(100vh - 60px);
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.03);
-  border-radius: 8px;
-  margin: 10px;
-  overflow-y: auto;
-  max-height: calc(100vh - 60px);
-}
-
-.footer {
+.app-header {
+  padding: 40px 32px 24px;
   text-align: center;
-  color: #909399;
-  background-color: #ffffff;
-  height: 40px;
-  line-height: 40px;
-  padding: 0;
-  border-top: 1px solid #f0f0f0;
-  font-size: 12px;
-  margin: 0 10px;
 }
 
-/* 修复Element Plus菜单样式 */
-.el-menu {
-  border-bottom: none;
+.app-title {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.app-subtitle {
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.app-main {
+  flex: 1;
+  padding: 12px 16px 32px;
+}
+
+.app-footer {
+  text-align: center;
+  padding: 16px 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .app-header {
+    padding: 32px 16px 18px;
+  }
+
+  .app-title {
+    font-size: 26px;
+  }
 }
 </style>
