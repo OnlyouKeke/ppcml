@@ -3,20 +3,20 @@ import type { ApiResponse, DetectionResponse } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
-// 判断是否在Electron环境中
-const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') > -1
+const runtime = window.appRuntime
+const isElectron = Boolean(runtime?.isElectron)
+const backendUrl = runtime?.backend?.url
+
+const fallbackPort = process.env.NODE_ENV === 'development' ? '8001' : '8000'
+const defaultBackendUrl = `http://127.0.0.1:${fallbackPort}`
 
 // 创建axios实例
 console.info('[API] Running in electron:', isElectron)
+console.info('[API] Backend URL resolved to:', isElectron ? backendUrl ?? defaultBackendUrl : '/api')
 
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
-  // 开发模式使用8001端口，生产模式使用8000端口
-  baseURL: isElectron
-    ? process.env.NODE_ENV === 'development'
-      ? 'http://localhost:8001'
-      : 'http://localhost:8000'
-    : '/api',
+  baseURL: isElectron ? backendUrl ?? defaultBackendUrl : '/api',
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json'
@@ -137,7 +137,7 @@ export const postGenerateCtcReport = async ({
   formData.append('roundnessThreshold', String(roundnessThreshold))
 
   try {
-    const response = await api.post('/ctc/report', formData, {
+    const response = await api.post<Blob, Blob>('/ctc/report', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
