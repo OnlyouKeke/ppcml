@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
+const isDev = process.env.NODE_ENV === 'development'
+const backendProtocol = process.env.FASTAPI_PROTOCOL || 'http'
+const backendHost = process.env.FASTAPI_HOST || '127.0.0.1'
+const backendPort = process.env.FASTAPI_PORT || (isDev ? '8001' : '8000')
+const backendUrl = `${backendProtocol}://${backendHost}:${backendPort}`
+
 // 暴露安全的API给渲染进程
 contextBridge.exposeInMainWorld('electronAPI', {
   // 获取应用信息
@@ -30,7 +36,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
 // 在预加载脚本中添加一些全局变量
 contextBridge.exposeInMainWorld('appRuntime', {
   isElectron: true,
-  platform: process.platform
+  platform: process.platform,
+  backend: {
+    protocol: backendProtocol,
+    host: backendHost,
+    port: backendPort,
+    url: backendUrl
+  }
 })
 
 // 在预加载脚本中添加一些信息到window对象
