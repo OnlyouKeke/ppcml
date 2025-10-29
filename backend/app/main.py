@@ -184,6 +184,42 @@ def _prepare_workdir(contents: bytes) -> tuple[Path, Path, Path]:
     return work_dir, dataset_root, output_dir
 
 
+async def _prepare_workdir_from_files(files: List[UploadFile]) -> tuple[Path, Path, Path]:
+    work_dir = Path(tempfile.mkdtemp(prefix="ctc-analysis-"))
+    dataset_root = work_dir / "uploaded"
+
+    try:
+        dataset_root.mkdir(parents=True, exist_ok=True)
+        root_resolved = dataset_root.resolve()
+
+        for upload in files:
+            filename = upload.filename
+            if not filename:
+                continue
+
+            target_path = root_resolved / filename
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            try:
+                target_path.resolve().relative_to(root_resolved)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="上传的文件路径无效") from exc
+
+            content = await upload.read()
+            if not content:
+                continue
+            target_path.write_bytes(content)
+
+        dataset_dir = _find_dataset_root(dataset_root)
+        output_dir = work_dir / "results"
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        shutil.rmtree(work_dir, ignore_errors=True)
+        raise
+
+    return work_dir, dataset_dir, output_dir
+
+
 verify_startup_token()
 
 app = FastAPI()
@@ -209,7 +245,8 @@ async def say_hello(name: str) -> dict[str, str]:
 
 @app.post("/ctc/report")
 async def generate_ctc_report(
-    file: UploadFile = File(...),
+    file: UploadFile | None = File(None),
+    files: List[UploadFile] | None = File(None),
     pet_name: str = Form("", alias="petName"),
     owner_name: str = Form("", alias="ownerName"),
     age: str = Form("", alias="age"),
@@ -220,18 +257,27 @@ async def generate_ctc_report(
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
 ) -> FileResponse:
-    if not file.filename or not file.filename.lower().endswith(".zip"):
-        raise HTTPException(status_code=400, detail="请上传ZIP格式的影像压缩包")
-
-    contents = await file.read()
-    if not contents:
-        raise HTTPException(status_code=400, detail="上传文件内容为空")
+    if (file is None or not file.filename) and not files:
+        raise HTTPException(status_code=400, detail="请上传包含影像数据的ZIP文件或文件夹")
 
     work_dir: Path | None = None
     dataset_root: Path | None = None
     output_dir: Path | None = None
     try:
-        work_dir, dataset_root, output_dir = _prepare_workdir(contents)
+        if file is not None and file.filename:
+            if not file.filename.lower().endswith(".zip"):
+                raise HTTPException(status_code=400, detail="请上传ZIP格式的影像压缩包")
+
+            contents = await file.read()
+            if not contents:
+                raise HTTPException(status_code=400, detail="上传文件内容为空")
+
+            work_dir, dataset_root, output_dir = _prepare_workdir(contents)
+        elif files:
+            work_dir, dataset_root, output_dir = await _prepare_workdir_from_files(files)
+        else:
+            raise HTTPException(status_code=400, detail="未提供有效的影像数据")
+
         analyzer = CTCAnalyzer(str(dataset_root), str(output_dir), roundness_threshold=roundness_threshold)
         analyzer.process_all_images()
 
@@ -269,7 +315,11 @@ async def generate_ctc_report(
             shutil.rmtree(work_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail="生成报告时发生未知错误") from exc
     finally:
-        await file.close()
+        if file is not None:
+            await file.close()
+        if files:
+            for upload in files:
+                await upload.close()
 
 
 if __name__ == "__main__":
