@@ -9,7 +9,11 @@ dependencies = [
     "pyinstaller>=6.14.2",
     "pyyaml>=6.0.2",
     "uvicorn[standard]>=0.35.0",
-    "ultralytics>=8.3.51",
+    "numpy>=2.0.0",
+    "opencv-python>=4.10.0.0",
+    "python-docx>=1.1.2",
+    "scikit-image>=0.24.0",
+    "scipy>=1.13.0",
 ]
 
 [[tool.uv.index]]
