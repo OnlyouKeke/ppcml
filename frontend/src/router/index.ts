@@ -1,35 +1,27 @@
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router'
 
-// 路由配置
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
-    name: 'home',
-    component: () => import('../views/Home.vue'),
+    name: 'report',
+    component: () => import('../views/ReportBuilder.vue'),
     meta: {
-      title: '首页'
+      title: '宠物检测报告'
     }
   },
   {
-    path: '/about',
-    name: 'about',
-    component: () => import('../views/About.vue'),
-    meta: {
-      title: '关于'
-    }
+    path: '/:pathMatch(.*)*',
+    redirect: '/'
   }
 ]
 
-// 创建路由实例
 const router = createRouter({
   history: createWebHashHistory(),
   routes
 })
 
-// 路由前置守卫
 router.beforeEach((to, _from, next) => {
-  // 设置页面标题
-  document.title = `${to.meta.title || '首页'} - Electron + FastAPI + Vue3`
+  document.title = `${to.meta.title || '宠物检测报告'} - Electron + FastAPI + Vue3`
   next()
 })
 
