@@ -16,6 +16,9 @@ let mainWindow: BrowserWindow | null = null
 // 后端端口
 const backendPort = isDev ? 8001 : 8000
 
+// 将后端端口暴露到渲染进程可读取的环境变量中
+process.env.FASTAPI_PORT = backendPort.toString()
+
 // 生成启动token
 function generateStartupToken(): string {
   const timestamp = Math.floor(Date.now() / 1000)

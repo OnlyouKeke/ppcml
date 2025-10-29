@@ -1,22 +1,41 @@
-import axios from 'axios'
+import axios, { isAxiosError } from 'axios'
 import type { ApiResponse, DetectionResponse } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
-// 判断是否在Electron环境中
-const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') > -1
+const runtime = window.appRuntime
+const isElectron = Boolean(runtime?.isElectron)
+const backendUrl = runtime?.backend?.url
+const backendHost = runtime?.backend?.host
+const backendPortFromRuntime = runtime?.backend?.port
+
+const fallbackPort = process.env.NODE_ENV === 'development' ? '8001' : '8000'
+const defaultBackendUrl = `http://127.0.0.1:${fallbackPort}`
 
 // 创建axios实例
 console.info('[API] Running in electron:', isElectron)
+console.info('[API] Renderer location origin:', window.location.origin)
+console.info('[API] Runtime metadata:', runtime)
+
+if (isElectron) {
+  if (backendUrl) {
+    console.info('[API] Using backend URL from runtime metadata:', backendUrl)
+  } else {
+    console.warn('[API] Backend URL missing from runtime metadata, falling back to default URL', {
+      backendHost,
+      backendPort: backendPortFromRuntime,
+      defaultBackendUrl
+    })
+  }
+} else {
+  console.info('[API] Non-electron environment detected, using relative API proxy')
+}
+
+console.info('[API] Backend URL resolved to:', isElectron ? backendUrl ?? defaultBackendUrl : '/api')
 
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
-  // 开发模式使用8001端口，生产模式使用8000端口
-  baseURL: isElectron
-    ? process.env.NODE_ENV === 'development'
-      ? 'http://localhost:8001'
-      : 'http://localhost:8000'
-    : '/api',
+  baseURL: isElectron ? backendUrl ?? defaultBackendUrl : '/api',
   timeout: 5000,
   headers: {
     'Content-Type': 'application/json'
@@ -49,21 +68,40 @@ api.interceptors.response.use(
   },
   error => {
     // 处理错误响应
+    const serializedConfig = {
+      baseURL: error.config?.baseURL,
+      url: error.config?.url,
+      method: error.config?.method,
+      timeout: error.config?.timeout,
+      headers: error.config?.headers
+    }
+
     console.error('[API] Request failed', {
       message: error.message,
       code: error.code,
-      config: error.config
+      config: serializedConfig
     })
+
     if (error.response) {
       // 服务器返回了错误状态码
-      console.error('API错误:', error.response.data)
+      console.error('API错误状态:', error.response.status)
+      console.error('API错误响应头:', error.response.headers)
+      console.error('API错误响应数据:', error.response.data)
     } else if (error.request) {
       // 请求已发送但没有收到响应
-      console.error('网络错误:', error.request)
+      console.error('网络错误 - 请求信息:', {
+        readyState: error.request.readyState,
+        status: error.request.status,
+        statusText: error.request.statusText,
+        responseType: error.request.responseType,
+        responseURL: error.request.responseURL,
+        withCredentials: error.request.withCredentials
+      })
     } else {
       // 请求设置时发生错误
       console.error('请求错误:', error.message)
     }
+
     return Promise.reject(error)
   }
 )
@@ -137,7 +175,7 @@ export const postGenerateCtcReport = async ({
   formData.append('roundnessThreshold', String(roundnessThreshold))
 
   try {
-    const response = await api.post('/ctc/report', formData, {
+    const response = await api.post<Blob, Blob>('/ctc/report', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
@@ -151,7 +189,27 @@ export const postGenerateCtcReport = async ({
 
     return response
   } catch (error) {
-    console.error('[API] CTC report request failed', error)
+    if (isAxiosError(error)) {
+      console.error('[API] CTC report request failed with Axios error', {
+        message: error.message,
+        code: error.code,
+        config: {
+          baseURL: error.config?.baseURL,
+          url: error.config?.url,
+          method: error.config?.method
+        }
+      })
+      if (error.request) {
+        console.error('[API] Axios request details', {
+          readyState: error.request.readyState,
+          status: error.request.status,
+          statusText: error.request.statusText,
+          responseURL: error.request.responseURL
+        })
+      }
+    } else {
+      console.error('[API] CTC report request failed with unexpected error', error)
+    }
     throw error
   }
 }
