@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { platform } from 'os'
 import { createHash } from 'crypto'
 
@@ -62,6 +62,34 @@ function createWindow() {
 }
 
 // 启动FastAPI后端
+function resolvePythonCommand(): string | null {
+  if (process.env.PYTHON_EXECUTABLE && process.env.PYTHON_EXECUTABLE.trim() !== '') {
+    const candidate = process.env.PYTHON_EXECUTABLE.trim()
+    const check = spawnSync(candidate, ['--version'], { stdio: 'ignore' })
+    if (!check.error) {
+      console.log(`Using python executable from PYTHON_EXECUTABLE: ${candidate}`)
+      return candidate
+    }
+    console.warn(`Failed to use python executable defined in PYTHON_EXECUTABLE (${candidate}). Falling back to auto detection.`)
+  }
+
+  const isWindows = platform() === 'win32'
+  const candidates = isWindows
+    ? ['python', 'py', 'python3']
+    : ['python3', 'python']
+
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate, ['--version'], { stdio: 'ignore' })
+    if (!result.error) {
+      console.log(`Detected python executable: ${candidate}`)
+      return candidate
+    }
+  }
+
+  console.error('Unable to locate a Python executable. Please ensure Python is installed and available in PATH.')
+  return null
+}
+
 function startFastApi() {
   console.log('Starting FastAPI backend...')
   
@@ -86,15 +114,20 @@ function startFastApi() {
     console.log('Python script:', pythonScript)
     
     try {
-        // 使用 Python 直接运行 main.py，传递环境变量
-          fastApiProcess = spawn('python', ['app/main.py'], {
-            cwd: backendDir,
-            stdio: ['ignore', 'pipe', 'pipe'],
-            env: env
-          })
-      } catch (error) {
-        console.error('Failed to start FastAPI in development mode:', error)
+      const pythonCommand = resolvePythonCommand()
+      if (!pythonCommand) {
+        return
       }
+
+      // 使用 Python 直接运行 main.py，传递环境变量
+      fastApiProcess = spawn(pythonCommand, ['app/main.py'], {
+        cwd: backendDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: env
+      })
+    } catch (error) {
+      console.error('Failed to start FastAPI in development mode:', error)
+    }
   } else {
     // 生产模式：使用打包的 exe 文件
     const backendExecutable = join(process.resourcesPath, 'fastapi-backend.exe')
