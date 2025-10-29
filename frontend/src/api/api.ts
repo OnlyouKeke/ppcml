@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { isAxiosError } from 'axios'
 import type { ApiResponse, DetectionResponse } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
@@ -49,21 +49,40 @@ api.interceptors.response.use(
   },
   error => {
     // 处理错误响应
+    const serializedConfig = {
+      baseURL: error.config?.baseURL,
+      url: error.config?.url,
+      method: error.config?.method,
+      timeout: error.config?.timeout,
+      headers: error.config?.headers
+    }
+
     console.error('[API] Request failed', {
       message: error.message,
       code: error.code,
-      config: error.config
+      config: serializedConfig
     })
+
     if (error.response) {
       // 服务器返回了错误状态码
-      console.error('API错误:', error.response.data)
+      console.error('API错误状态:', error.response.status)
+      console.error('API错误响应头:', error.response.headers)
+      console.error('API错误响应数据:', error.response.data)
     } else if (error.request) {
       // 请求已发送但没有收到响应
-      console.error('网络错误:', error.request)
+      console.error('网络错误 - 请求信息:', {
+        readyState: error.request.readyState,
+        status: error.request.status,
+        statusText: error.request.statusText,
+        responseType: error.request.responseType,
+        responseURL: error.request.responseURL,
+        withCredentials: error.request.withCredentials
+      })
     } else {
       // 请求设置时发生错误
       console.error('请求错误:', error.message)
     }
+
     return Promise.reject(error)
   }
 )
@@ -151,7 +170,27 @@ export const postGenerateCtcReport = async ({
 
     return response
   } catch (error) {
-    console.error('[API] CTC report request failed', error)
+    if (isAxiosError(error)) {
+      console.error('[API] CTC report request failed with Axios error', {
+        message: error.message,
+        code: error.code,
+        config: {
+          baseURL: error.config?.baseURL,
+          url: error.config?.url,
+          method: error.config?.method
+        }
+      })
+      if (error.request) {
+        console.error('[API] Axios request details', {
+          readyState: error.request.readyState,
+          status: error.request.status,
+          statusText: error.request.statusText,
+          responseURL: error.request.responseURL
+        })
+      }
+    } else {
+      console.error('[API] CTC report request failed with unexpected error', error)
+    }
     throw error
   }
 }
