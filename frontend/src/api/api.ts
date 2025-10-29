@@ -7,6 +7,8 @@ type FileWithRelativePath = File & { webkitRelativePath?: string }
 const isElectron = window.navigator.userAgent.toLowerCase().indexOf('electron') > -1
 
 // 创建axios实例
+console.info('[API] Running in electron:', isElectron)
+
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
   // 开发模式使用8001端口，生产模式使用8000端口
@@ -24,10 +26,18 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   config => {
+    console.debug('[API] Sending request', {
+      method: config.method,
+      url: config.url,
+      baseURL: config.baseURL,
+      timeout: config.timeout,
+      headers: config.headers
+    })
     // 可以在这里添加认证信息等
     return config
   },
   error => {
+    console.error('[API] Failed to prepare request', error)
     return Promise.reject(error)
   }
 )
@@ -39,6 +49,11 @@ api.interceptors.response.use(
   },
   error => {
     // 处理错误响应
+    console.error('[API] Request failed', {
+      message: error.message,
+      code: error.code,
+      config: error.config
+    })
     if (error.response) {
       // 服务器返回了错误状态码
       console.error('API错误:', error.response.data)
@@ -98,6 +113,14 @@ export const postGenerateCtcReport = async ({
   roundnessThreshold = 0.3
 }: CtcReportPayload): Promise<Blob> => {
   const formData = new FormData()
+  console.debug('[API] Preparing CTC report request', {
+    fileCount: files.length,
+    fileNames: files.map(file =>
+      (file as FileWithRelativePath).webkitRelativePath || file.name
+    ),
+    form,
+    roundnessThreshold
+  })
   files.forEach(file => {
     const relativePath = (file as FileWithRelativePath).webkitRelativePath || file.name
     formData.append('files', file, relativePath)
@@ -113,12 +136,24 @@ export const postGenerateCtcReport = async ({
   formData.append('massLocation', form.massLocation || '')
   formData.append('roundnessThreshold', String(roundnessThreshold))
 
-  return await api.post('/ctc/report', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    },
-    responseType: 'blob'
-  })
+  try {
+    const response = await api.post('/ctc/report', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      responseType: 'blob'
+    })
+
+    console.debug('[API] Received CTC report response', {
+      size: response.size,
+      type: response.type
+    })
+
+    return response
+  } catch (error) {
+    console.error('[API] CTC report request failed', error)
+    throw error
+  }
 }
 
 export default api
