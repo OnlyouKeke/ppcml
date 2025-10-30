@@ -330,6 +330,8 @@ async def _prepare_workdir_from_files(files: List[UploadFile]) -> tuple[Path, Pa
 
 verify_startup_token()
 
+APP_START_TIME = time.time()
+
 app = FastAPI()
 
 app.add_middleware(
@@ -349,6 +351,17 @@ async def root() -> dict[str, str]:
 @app.get("/hello/{name}")
 async def say_hello(name: str) -> dict[str, str]:
     return {"message": f"Hello {name}"}
+
+
+@app.get("/healthz")
+async def heartbeat() -> dict[str, float | str]:
+    """简单的心跳检测端点，供前端检测后端状态"""
+    uptime_seconds = time.time() - APP_START_TIME
+    return {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "uptime": round(uptime_seconds, 3),
+    }
 
 
 @app.post("/ctc/report")
