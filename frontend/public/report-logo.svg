@@ -1,0 +1,14 @@
+<svg width="160" height="80" viewBox="0 0 160 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="dnaGradient" x1="0" y1="0" x2="160" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F5AF2" />
+      <stop offset="0.5" stop-color="#1E88FF" />
+      <stop offset="1" stop-color="#0A2A7A" />
+    </linearGradient>
+  </defs>
+  <path d="M30 16C46 32 62 40 80 40C98 40 114 32 130 16" stroke="url(#dnaGradient)" stroke-width="8" stroke-linecap="round" />
+  <path d="M30 64C46 48 62 40 80 40C98 40 114 48 130 64" stroke="url(#dnaGradient)" stroke-width="8" stroke-linecap="round" />
+  <path d="M16 16V64" stroke="url(#dnaGradient)" stroke-width="8" stroke-linecap="round" />
+  <path d="M144 16V64" stroke="url(#dnaGradient)" stroke-width="8" stroke-linecap="round" />
+  <text x="80" y="78" text-anchor="middle" font-family="'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif" font-size="14" fill="#0B1F4B">HBI BIOCHIP</text>
+</svg>
