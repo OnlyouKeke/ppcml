@@ -1,8 +1,17 @@
 import hashlib
 import logging
 import os
-import shutil
 import sys
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+# 确保标准输出流使用 UTF-8 编码
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
+    
+import shutil
+import io
 import tempfile
 import time
 import zipfile
@@ -27,11 +36,28 @@ except ImportError:
     # 当直接运行脚本时使用绝对导入
     from ctc import CTCAnalyzer
 
+for _stream_name in ("stdout", "stderr"):
+    _stream = getattr(sys, _stream_name, None)
+    if _stream is None:
+        continue
+    encoding = getattr(_stream, "encoding", None)
+    if encoding and encoding.lower() == "utf-8":
+        continue
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except AttributeError:
+        buffer = getattr(_stream, "buffer", None)
+        if buffer is not None:
+            setattr(sys, _stream_name, io.TextIOWrapper(buffer, encoding="utf-8", errors="replace"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] %(levelname)s %(name)s - %(message)s",
     stream=sys.stdout,
+    encoding='utf-8'
 )
+
+
 
 logger = logging.getLogger("ctc_app")
 
