@@ -102,26 +102,6 @@
           </el-form>
         </el-card>
 
-        <el-card shadow="never" class="result-card">
-          <template #header>
-            <div class="card-title">检测统计</div>
-          </template>
-          <el-empty
-            v-if="!reportData || !reportData.channels.length"
-            description="暂未生成检测统计"
-            :image-size="120"
-          />
-          <div v-else class="result-summary">
-            <el-table :data="channelTableData" border size="small" class="result-table" height="240">
-              <el-table-column prop="channel" label="通道" min-width="120" />
-              <el-table-column prop="ctc" label="CK 数量" min-width="120" align="center" />
-              <el-table-column prop="wbc" label="CD45 数量" min-width="120" align="center" />
-            </el-table>
-            <div class="result-total">
-              总计：CK {{ reportData.totals.totalCtc }} 个，CD45 {{ reportData.totals.totalWbc }} 个
-            </div>
-          </div>
-        </el-card>
       </el-col>
 
       <el-col :xs="24" :md="14" class="preview-column">
@@ -135,50 +115,20 @@
             </div>
             <div v-else-if="reportData" class="preview-content">
               <div class="preview-header">
-                <h3 class="preview-title">检测报告</h3>
-                <p class="preview-generated-at">生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}</p>
+                <div class="preview-heading">
+                  <h3 class="preview-title">检测报告</h3>
+                  <p class="preview-generated-at">生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}</p>
+                </div>
+                <img class="preview-logo" src="/report-logo.svg" alt="华芯生物医疗" />
               </div>
               <section class="preview-section">
                 <h4 class="section-title">基础信息</h4>
                 <ul class="metadata-list">
-                  <li v-for="item in reportData.metadata" :key="item.label" class="metadata-item">
+                  <li v-for="item in previewMetadata" :key="item.label" class="metadata-item">
                     <span class="metadata-label">{{ item.label }}</span>
                     <span class="metadata-value">{{ item.value }}</span>
                   </li>
                 </ul>
-              </section>
-              <el-divider />
-              <section class="preview-section">
-                <h4 class="section-title">检测结果</h4>
-                <p class="section-description">{{ reportData.selectionText }}</p>
-                <el-table
-                  v-if="reportData.channels.length"
-                  :data="reportData.channels"
-                  border
-                  size="small"
-                  class="preview-table"
-                >
-                  <el-table-column prop="channel" label="通道" min-width="120" />
-                  <el-table-column prop="ctc" label="CK 数量" min-width="120" align="center" />
-                  <el-table-column prop="wbc" label="CD45 数量" min-width="120" align="center" />
-                </el-table>
-                <el-empty
-                  v-else
-                  description="当前未检测到有效的通道统计数据"
-                  :image-size="80"
-                  class="preview-empty"
-                />
-                <div
-                  v-if="reportData.hasCtcImages && reportData.imageSet?.items?.length"
-                  class="image-set"
-                >
-                  <div v-for="image in reportData.imageSet.items" :key="image.label" class="image-item">
-                    <img :src="buildImageSrc(image)" :alt="image.label" />
-                    <span class="image-caption">{{ image.label }}</span>
-                  </div>
-                </div>
-                <p class="result-text">{{ reportData.resultText }}</p>
-                <p class="remark-text">{{ reportData.remarkText }}</p>
               </section>
               <footer class="preview-footer">
                 检测人：______________&nbsp;&nbsp;&nbsp;&nbsp;审核人：______________&nbsp;&nbsp;&nbsp;&nbsp;报告日期：______________
@@ -218,7 +168,7 @@ import { ElMessage } from 'element-plus'
 import { isAxiosError } from 'axios'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { getHeartbeat, postGenerateCtcReport } from '../api/api'
-import type { CtcReportResponse, ReportImageItem } from '../types/api'
+import type { CtcReportResponse, ReportMetadataItem } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -275,7 +225,47 @@ const roundnessThreshold = ref(0.3)
 
 const hasReport = computed(() => Boolean(reportData.value))
 const canDownloadReport = computed(() => Boolean(generatedReportBlob.value))
-const channelTableData = computed(() => reportData.value?.channels ?? [])
+
+const formMetadataEntries = computed<ReportMetadataItem[]>(() => {
+  const intakeValue = form.medicationIntake || '未填写'
+  const medicationValue = intakeValue === '是' ? form.medicationDetails || '未填写' : '无'
+  return [
+    { label: '宠物姓名', value: form.petName || '未填写' },
+    { label: '宠主姓名', value: form.ownerName || '未填写' },
+    { label: '年龄', value: form.age || '未填写' },
+    { label: '性别', value: form.gender || '未填写' },
+    { label: '标本类型', value: form.sampleType || '未填写' },
+    { label: '一周内是否有药物摄入', value: intakeValue },
+    { label: '药物名称', value: medicationValue },
+    { label: '备注', value: form.notes || '无' }
+  ]
+})
+
+const previewMetadata = computed<ReportMetadataItem[]>(() => {
+  if (!reportData.value) {
+    return formMetadataEntries.value
+  }
+
+  const metadataOrder = reportData.value.metadata.map(item => item.label)
+  const metadataMap = new Map<string, string>()
+
+  reportData.value.metadata.forEach(item => {
+    metadataMap.set(item.label, item.value)
+  })
+
+  formMetadataEntries.value.forEach(item => {
+    metadataMap.set(item.label, item.value)
+  })
+
+  if (!metadataOrder.length) {
+    return formMetadataEntries.value
+  }
+
+  return metadataOrder.map(label => ({
+    label,
+    value: metadataMap.get(label) ?? ''
+  }))
+})
 
 const expectedChannels = ['1', '2', '3', '4', '5']
 
@@ -325,8 +315,6 @@ const applyReportBlob = (data: CtcReportResponse) => {
   generatedReportBlob.value = blob
   generatedReportUrl.value = window.URL.createObjectURL(blob)
 }
-
-const buildImageSrc = (image: ReportImageItem) => `data:${image.mimeType};base64,${image.data}`
 
 const formatGeneratedAt = (value: string) => {
   const date = new Date(value)
@@ -589,8 +577,7 @@ onBeforeUnmount(() => {
 }
 
 .form-card,
-.preview-card,
-.result-card {
+.preview-card {
   border-radius: 16px;
   overflow: hidden;
 }
@@ -642,30 +629,6 @@ onBeforeUnmount(() => {
   color: #9ca3af;
 }
 
-.result-card {
-  margin-top: 24px;
-}
-
-.result-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.result-table {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.result-total {
-  padding: 8px 12px;
-  border-radius: 12px;
-  background: #eff6ff;
-  color: #1d4ed8;
-  font-size: 14px;
-  font-weight: 500;
-}
-
 .preview-wrapper {
   background: #f3f4f6;
   border-radius: 16px;
@@ -693,8 +656,20 @@ onBeforeUnmount(() => {
 
 .preview-header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.preview-heading {
+  display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.preview-logo {
+  width: 96px;
+  height: auto;
 }
 
 .preview-title {
@@ -723,12 +698,6 @@ onBeforeUnmount(() => {
   color: #1f2937;
 }
 
-.section-description {
-  margin: 0;
-  font-size: 13px;
-  color: #6b7280;
-}
-
 .metadata-list {
   list-style: none;
   padding: 0;
@@ -753,52 +722,6 @@ onBeforeUnmount(() => {
 .metadata-value {
   flex: 1;
   word-break: break-all;
-}
-
-.preview-table {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.preview-empty {
-  padding: 24px 0;
-}
-
-.image-set {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.image-item {
-  flex: 1 1 180px;
-  text-align: center;
-}
-
-.image-item img {
-  width: 100%;
-  border-radius: 12px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
-}
-
-.image-caption {
-  display: block;
-  margin-top: 6px;
-  font-size: 13px;
-  color: #334155;
-}
-
-.result-text {
-  margin: 0;
-  font-size: 14px;
-  color: #dc2626;
-  font-weight: 500;
-}
-
-.remark-text {
-  margin: 0;
-  font-size: 14px;
-  color: #166534;
 }
 
 .preview-footer {
