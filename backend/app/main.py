@@ -18,7 +18,7 @@ import tempfile
 import time
 import zipfile
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, List
 
@@ -224,7 +224,10 @@ def _populate_table(table, rows: List[List[str]]) -> None:
 
 def _set_table_transparent(table) -> None:
     tbl = table._tbl
-    tbl_pr = tbl.get_or_add_tblPr()
+    tbl_pr = tbl.tblPr
+    if tbl_pr is None:
+        tbl_pr = OxmlElement("w:tblPr")
+        tbl.insert(0, tbl_pr)
     borders = tbl_pr.find(qn("w:tblBorders"))
     if borders is None:
         borders = OxmlElement("w:tblBorders")
@@ -466,7 +469,7 @@ async def heartbeat() -> dict[str, float | str]:
     uptime_seconds = time.time() - APP_START_TIME
     return {
         "status": "ok",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "uptime": round(uptime_seconds, 3),
     }
 
@@ -615,7 +618,7 @@ async def generate_ctc_report(
         response_payload = {
             "fileName": "ctc_report.docx",
             "fileContent": encoded_report,
-            "generatedAt": datetime.utcnow().isoformat() + "Z",
+            "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "metadata": metadata_items,
             "channels": channel_stats,
             "totals": {
