@@ -1,5 +1,10 @@
 import axios, { isAxiosError } from 'axios'
-import type { ApiResponse, DetectionResponse, HeartbeatResponse } from '../types/api'
+import type {
+  ApiResponse,
+  CtcReportResponse,
+  DetectionResponse,
+  HeartbeatResponse
+} from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -134,7 +139,7 @@ export const postGenerateCtcReport = async ({
   files,
   form,
   roundnessThreshold = 0.3
-}: CtcReportPayload): Promise<Blob> => {
+}: CtcReportPayload): Promise<CtcReportResponse> => {
   const formData = new FormData()
   console.debug('[API] Preparing CTC report request', {
     fileCount: files.length,
@@ -160,17 +165,16 @@ export const postGenerateCtcReport = async ({
   formData.append('roundnessThreshold', String(roundnessThreshold))
 
   try {
-    const response = await api.post<Blob, Blob>('/ctc/report', formData, {
+    const response = (await api.post<CtcReportResponse>('/ctc/report', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       },
-      responseType: 'blob',
       timeout: 600000
-    })
+    })) as unknown as CtcReportResponse
 
     console.debug('[API] Received CTC report response', {
-      size: response.size,
-      type: response.type
+      hasMetadata: Boolean(response.metadata?.length),
+      channelCount: response.channels?.length ?? 0
     })
 
     return response
