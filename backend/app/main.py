@@ -263,6 +263,14 @@ def _set_table_transparent(table) -> None:
 
 def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str], output_path: Path) -> None:
     document = Document()
+    logo_path = Path(__file__).resolve().parent / "assets" / "HBI.jpg"
+    if logo_path.exists():
+        logo_paragraph = document.add_paragraph()
+        logo_run = logo_paragraph.add_run()
+        logo_run.add_picture(str(logo_path), width=Inches(1.6))
+        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        logo_paragraph.paragraph_format.space_after = Pt(6)
+
 
     title_paragraph = document.add_paragraph()
     title_run = title_paragraph.add_run("检测报告")
