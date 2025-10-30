@@ -237,11 +237,6 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
         info_run = info_paragraph.add_run(f"{label}：{value}")
         _apply_run_style(info_run, 12, color=RGBColor(31, 41, 55))
 
-    separator = document.add_paragraph()
-    separator_run = separator.add_run("-------------------------------")
-    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
-    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
 
     result_heading = document.add_paragraph()
     result_heading_run = result_heading.add_run("检测结果")
@@ -307,6 +302,12 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     remark_paragraph = document.add_paragraph()
     remark_run = remark_paragraph.add_run(f"备注：生物标记物染色选用{biomarker_text}。")
     _apply_run_style(remark_run, 12, color=RGBColor(30, 64, 45))
+    
+    separator = document.add_paragraph()
+    separator_run = separator.add_run("-------------------------------")
+    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
+    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
 
     footer = document.add_paragraph()
     footer_run = footer.add_run("检测人：______________    审核人：______________    报告日期：______________")
