@@ -29,7 +29,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse,JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 try:
     from .ctc import CTCAnalyzer
@@ -123,6 +123,10 @@ def _find_dataset_root(extracted_dir: Path) -> Path:
     raise HTTPException(status_code=400, detail="未找到符合CTC分析目录结构的文件夹")
 
 
+def _normalize_field(value: str) -> str:
+    return value.strip()
+
+
 def _create_metadata_entries(
     pet_name: str,
     owner_name: str,
@@ -134,18 +138,23 @@ def _create_metadata_entries(
     notes: str,
 ) -> OrderedDict:
     entries: OrderedDict[str, str] = OrderedDict()
-    entries["宠物姓名"] = pet_name or "未填写"
-    entries["宠主姓名"] = owner_name or "未填写"
-    entries["年龄"] = age or "未填写"
-    entries["性别"] = gender or "未填写"
-    entries["标本类型"] = sample_type or "未填写"
-    intake_value = medication_intake or "未填写"
+    entries["宠物姓名"] = _normalize_field(pet_name)
+    entries["宠主姓名"] = _normalize_field(owner_name)
+    entries["年龄"] = _normalize_field(age)
+    entries["性别"] = _normalize_field(gender)
+    entries["标本类型"] = _normalize_field(sample_type)
+
+    intake_value = _normalize_field(medication_intake)
     entries["一周内是否有药物摄入"] = intake_value
+
     if intake_value == "是":
-        entries["药物名称"] = medication_details or "未填写"
+        entries["药物名称"] = _normalize_field(medication_details)
+    elif intake_value == "否":
+        entries["药物名称"] = ""
     else:
-        entries["药物名称"] = "无"
-    entries["备注"] = notes or "无"
+        entries["药物名称"] = _normalize_field(medication_details)
+
+    entries["备注"] = _normalize_field(notes)
     return entries
 
 
@@ -213,16 +222,44 @@ def _populate_table(table, rows: List[List[str]]) -> None:
             _apply_font_size(cell.paragraphs)
 
 
+def _set_table_transparent(table) -> None:
+    tbl = table._tbl
+    tbl_pr = tbl.get_or_add_tblPr()
+    borders = tbl_pr.find(qn("w:tblBorders"))
+    if borders is None:
+        borders = OxmlElement("w:tblBorders")
+        tbl_pr.append(borders)
+
+    for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        border = borders.find(qn(f"w:{border_name}"))
+        if border is None:
+            border = OxmlElement(f"w:{border_name}")
+            borders.append(border)
+        border.set(qn("w:val"), "nil")
+
+    for row in table.rows:
+        for cell in row.cells:
+            tc_pr = cell._tc.get_or_add_tcPr()
+
+            shading = tc_pr.find(qn("w:shd"))
+            if shading is not None:
+                tc_pr.remove(shading)
+
+            tc_borders = tc_pr.find(qn("w:tcBorders"))
+            if tc_borders is None:
+                tc_borders = OxmlElement("w:tcBorders")
+                tc_pr.append(tc_borders)
+
+            for border_name in ("top", "left", "bottom", "right"):
+                border = tc_borders.find(qn(f"w:{border_name}"))
+                if border is None:
+                    border = OxmlElement(f"w:{border_name}")
+                    tc_borders.append(border)
+                border.set(qn("w:val"), "nil")
+
+
 def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str], output_path: Path) -> None:
     document = Document()
-
-    logo_path = Path(__file__).resolve().parent / "assets" / "HBI.jpg"
-    if logo_path.exists():
-        logo_paragraph = document.add_paragraph()
-        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        logo_run = logo_paragraph.add_run()
-        logo_run.add_picture(str(logo_path), width=Inches(1.4))
-        logo_paragraph.paragraph_format.space_after = Pt(6)
 
     title_paragraph = document.add_paragraph()
     title_run = title_paragraph.add_run("检测报告")
@@ -235,6 +272,8 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
         rows = (len(metadata) + 1) // 2
         info_table = document.add_table(rows=rows, cols=4)
         info_table.autofit = True
+        info_table.style = None
+        _set_table_transparent(info_table)
 
         for index, (label, value) in enumerate(metadata.items()):
             row = info_table.rows[index // 2]
@@ -271,14 +310,24 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
     if ctc_image_sets:
         image_set = ctc_image_sets[0]
+        def _resolve_preview_path(primary_key: str, *fallback_keys: str) -> str | None:
+            keys = (primary_key,) + fallback_keys
+            for key in keys:
+                candidate = image_set.get(key)
+                if candidate and os.path.exists(candidate):
+                    return candidate
+            return None
+
         labels_and_paths = [
-            ("蓝色通道", image_set["blue_path"]),
-            ("绿色通道", image_set["green_path"]),
-            ("红色通道", image_set["red_path"]),
+            ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
+            ("绿色通道", _resolve_preview_path("green_path", "green_original")),
+            ("红色通道", _resolve_preview_path("red_path", "red_original")),
         ]
 
         image_table = document.add_table(rows=2, cols=3)
         image_table.autofit = True
+        image_table.style = None
+        _set_table_transparent(image_table)
 
         first_row = image_table.rows[0]
         second_row = image_table.rows[1]
@@ -310,8 +359,8 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     result_run = result_paragraph.add_run(result_text)
     _apply_run_style(result_run, 12, color=RGBColor(220, 38, 38) if doc_names else RGBColor(107, 114, 128))
 
-    notes_value = metadata.get("备注", "无") or "无"
-    biomarker_text = notes_value if notes_value not in {"无", "未填写"} else "______________"
+    notes_value = (metadata.get("备注") or "").strip()
+    biomarker_text = notes_value if notes_value else "______________"
     remark_paragraph = document.add_paragraph()
     remark_run = remark_paragraph.add_run(f"备注：生物标记物染色选用{biomarker_text}。")
     _apply_run_style(remark_run, 12, color=RGBColor(30, 64, 45))
@@ -516,18 +565,29 @@ async def generate_ctc_report(
         image_set_payload: dict | None = None
         if ctc_image_sets:
             first_set = ctc_image_sets[0]
+
+            def _resolve_image(primary_key: str, *fallback_keys: str) -> Path | None:
+                keys = (primary_key,) + fallback_keys
+                for key in keys:
+                    candidate = first_set.get(key)
+                    if candidate:
+                        candidate_path = Path(candidate)
+                        if candidate_path.exists():
+                            return candidate_path
+                return None
+
             images_payload = []
-            for label, key in (
-                ("蓝色通道", "blue_path"),
-                ("绿色通道", "green_path"),
-                ("红色通道", "red_path"),
+            for label, keys in (
+                ("蓝色通道", ("blue_path", "blue_original")),
+                ("绿色通道", ("green_path", "green_original")),
+                ("红色通道", ("red_path", "red_original")),
             ):
-                image_path = first_set.get(key)
-                if not image_path or not os.path.exists(image_path):
+                image_path = _resolve_image(*keys)
+                if not image_path:
                     continue
-                mime_type, _ = mimetypes.guess_type(image_path)
+                mime_type, _ = mimetypes.guess_type(str(image_path))
                 try:
-                    image_bytes = Path(image_path).read_bytes()
+                    image_bytes = image_path.read_bytes()
                 except OSError:
                     logger.warning("无法读取预览图像：%s", image_path)
                     continue
@@ -548,8 +608,8 @@ async def generate_ctc_report(
             else "结果说明：未识别出有效的检测结果，请检查上传的影像资料。"
         )
 
-        notes_value = metadata.get("备注", "无") or "无"
-        biomarker_text = notes_value if notes_value not in {"无", "未填写"} else "______________"
+        notes_value = (metadata.get("备注") or "").strip()
+        biomarker_text = notes_value if notes_value else "______________"
         remark_text = f"备注：生物标记物染色选用{biomarker_text}。"
 
         response_payload = {
