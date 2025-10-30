@@ -216,21 +216,27 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     _apply_run_style(title_run, 28, bold=True, color=RGBColor(31, 41, 55))
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    separator = document.add_paragraph()
-    separator_run = separator.add_run("-------------- 分割线 --------------")
-    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
-    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # separator = document.add_paragraph()
+    # separator_run = separator.add_run("-------------- 分割线 --------------")
+    # _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
+    # separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    info_heading = document.add_paragraph()
-    info_heading_run = info_heading.add_run("之前填写的信息")
-    _apply_run_style(info_heading_run, 16, bold=True, color=RGBColor(217, 119, 6))
-    info_heading.paragraph_format.space_before = Pt(12)
-    info_heading.paragraph_format.space_after = Pt(6)
+    # info_heading = document.add_paragraph()
+    # info_heading_run = info_heading.add_run("之前填写的信息")
+    # _apply_run_style(info_heading_run, 16, bold=True, color=RGBColor(217, 119, 6))
+    # info_heading.paragraph_format.space_before = Pt(12)
+    # info_heading.paragraph_format.space_after = Pt(6)
 
     for label, value in metadata.items():
         info_paragraph = document.add_paragraph()
         info_run = info_paragraph.add_run(f"{label}：{value}")
         _apply_run_style(info_run, 12, color=RGBColor(31, 41, 55))
+
+    separator = document.add_paragraph()
+    separator_run = separator.add_run("-------------- 分割线 --------------")
+    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
+    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
 
     result_heading = document.add_paragraph()
     result_heading_run = result_heading.add_run("检测结果")
@@ -250,7 +256,7 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     _apply_run_style(selection_run, 12, color=RGBColor(55, 65, 81))
 
     result_text = (
-        f"结果说明：经实验结果判定，在一二通道中找到CD45{total_wbc}个，CK{total_ctc}个。"
+        f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
         if doc_names
         else "结果说明：未能识别出有效的检测结果，请检查上传的影像资料。"
     )
