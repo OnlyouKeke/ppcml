@@ -119,7 +119,6 @@
                   <h3 class="preview-title">检测报告</h3>
                   <p class="preview-generated-at">生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}</p>
                 </div>
-                <img class="preview-logo" src="/HBI.jpg" alt="华芯生物医疗" />
               </div>
               <section class="preview-section">
                 <h4 class="section-title">基础信息</h4>
@@ -252,18 +251,32 @@ const roundnessThreshold = ref(0.3)
 const hasReport = computed(() => Boolean(reportData.value))
 const canDownloadReport = computed(() => Boolean(generatedReportBlob.value))
 
+const sanitizeText = (value: string | null | undefined) => {
+  if (!value) {
+    return ''
+  }
+  const trimmed = value.trim()
+  return trimmed === '未填写' ? '' : trimmed
+}
+
 const formMetadataEntries = computed<ReportMetadataItem[]>(() => {
-  const intakeValue = form.medicationIntake || '未填写'
-  const medicationValue = intakeValue === '是' ? form.medicationDetails || '未填写' : '无'
+  const intakeValue = sanitizeText(form.medicationIntake)
+  const medicationValue =
+    intakeValue === '是'
+      ? sanitizeText(form.medicationDetails)
+      : intakeValue === '否'
+        ? ''
+        : sanitizeText(form.medicationDetails)
+
   return [
-    { label: '宠物姓名', value: form.petName || '未填写' },
-    { label: '宠主姓名', value: form.ownerName || '未填写' },
-    { label: '年龄', value: form.age || '未填写' },
-    { label: '性别', value: form.gender || '未填写' },
-    { label: '标本类型', value: form.sampleType || '未填写' },
+    { label: '宠物姓名', value: sanitizeText(form.petName) },
+    { label: '宠主姓名', value: sanitizeText(form.ownerName) },
+    { label: '年龄', value: sanitizeText(form.age) },
+    { label: '性别', value: sanitizeText(form.gender) },
+    { label: '标本类型', value: sanitizeText(form.sampleType) },
     { label: '一周内是否有药物摄入', value: intakeValue },
     { label: '药物名称', value: medicationValue },
-    { label: '备注', value: form.notes || '无' }
+    { label: '备注', value: sanitizeText(form.notes) }
   ]
 })
 
@@ -276,11 +289,11 @@ const previewMetadata = computed<ReportMetadataItem[]>(() => {
   const metadataMap = new Map<string, string>()
 
   reportData.value.metadata.forEach(item => {
-    metadataMap.set(item.label, item.value)
+    metadataMap.set(item.label, sanitizeText(item.value))
   })
 
   formMetadataEntries.value.forEach(item => {
-    metadataMap.set(item.label, item.value)
+    metadataMap.set(item.label, sanitizeText(item.value))
   })
 
   if (!metadataOrder.length) {
@@ -289,7 +302,7 @@ const previewMetadata = computed<ReportMetadataItem[]>(() => {
 
   return metadataOrder.map(label => ({
     label,
-    value: metadataMap.get(label) ?? ''
+    value: sanitizeText(metadataMap.get(label))
   }))
 })
 
@@ -718,11 +731,6 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
-.preview-logo {
-  width: 96px;
-  height: auto;
-}
-
 .preview-title {
   margin: 0;
   font-size: 22px;
@@ -749,27 +757,22 @@ onBeforeUnmount(() => {
   color: #1f2937;
 }
 
+
 .metadata-table {
   width: 100%;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
-  background-color: #f8fafc;
-  border-radius: 12px;
-  overflow: hidden;
+  background-color: transparent;
 }
 
 .metadata-table tbody tr {
-  background-color: rgba(248, 250, 252, 0.9);
-}
-
-.metadata-table tbody tr:nth-child(odd) {
-  background-color: rgba(255, 255, 255, 0.75);
+  background-color: transparent;
 }
 
 .metadata-heading,
 .metadata-data {
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
   font-size: 14px;
 }
 
@@ -778,13 +781,13 @@ onBeforeUnmount(() => {
   color: #1d4ed8;
   font-weight: 600;
   text-align: right;
-  background-color: rgba(59, 130, 246, 0.08);
+  background-color: transparent;
 }
 
 .metadata-data {
   color: #0f172a;
   word-break: break-word;
-  background-color: rgba(255, 255, 255, 0.86);
+  background-color: transparent;
 }
 
 .metadata-table tbody tr:last-child .metadata-heading,
