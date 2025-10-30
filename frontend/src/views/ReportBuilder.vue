@@ -95,6 +95,9 @@
             <canvas ref="canvasRef" class="report-canvas"></canvas>
           </div>
           <div class="preview-actions">
+            <el-button type="success" :disabled="!canDownloadReport" @click="downloadDocx">
+              导出 Word 报告
+            </el-button>
             <el-button type="primary" :disabled="!hasReport" @click="exportToPdf">导出为 PDF</el-button>
             <el-button :disabled="!hasReport" @click="downloadImage">下载图片</el-button>
             <el-button @click="resetAll">重置内容</el-button>
@@ -141,6 +144,9 @@ const detections = ref<Detection[]>([])
 const isDetecting = ref(false)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const roundnessThreshold = ref(0.3)
+const generatedReportBlob = ref<Blob | null>(null)
+const generatedReportUrl = ref('')
+const previewImageUrl = ref('')
 
 const heartbeatIntervalMs = 5000
 let heartbeatTimer: number | null = null
@@ -148,6 +154,7 @@ let heartbeatFailureCount = 0
 let heartbeatDisconnectNotified = false
 
 const hasReport = computed(() => Boolean(imageSrc.value))
+const canDownloadReport = computed(() => Boolean(generatedReportBlob.value))
 
 const detectionTable = computed(() =>
   detections.value.map((item, index) => ({
@@ -160,10 +167,53 @@ const detectionTable = computed(() =>
 
 const expectedChannels = ['1', '2', '3', '4', '5']
 
+const revokeObjectUrl = (url: string) => {
+  if (url) {
+    window.URL.revokeObjectURL(url)
+  }
+}
+
 const resetSelectedFolder = () => {
   selectedFiles.value = []
   selectedFolderName.value = ''
   folderFileCount.value = 0
+  if (generatedReportUrl.value) {
+    revokeObjectUrl(generatedReportUrl.value)
+    generatedReportUrl.value = ''
+  }
+  generatedReportBlob.value = null
+  if (previewImageUrl.value) {
+    revokeObjectUrl(previewImageUrl.value)
+    previewImageUrl.value = ''
+  }
+}
+
+const updatePreviewImage = () => {
+  if (!selectedFiles.value.length) {
+    imageSrc.value = ''
+    return
+  }
+
+  const imageFile =
+    selectedFiles.value.find(file => file.type.startsWith('image/')) ||
+    selectedFiles.value.find(file => /\.(png|jpe?g|bmp|gif)$/i.test(file.name)) ||
+    null
+
+  if (!imageFile) {
+    if (generatedReportBlob.value) {
+      ElMessage.warning('报告已生成，但未找到可用于预览的图像文件')
+    }
+    imageSrc.value = ''
+    return
+  }
+
+  if (previewImageUrl.value) {
+    revokeObjectUrl(previewImageUrl.value)
+  }
+
+  const url = window.URL.createObjectURL(imageFile)
+  previewImageUrl.value = url
+  imageSrc.value = url
 }
 
 const handleFolderChange = (event: Event) => {
@@ -231,6 +281,12 @@ const runDetection = async () => {
     return
   }
 
+  if (generatedReportUrl.value) {
+    revokeObjectUrl(generatedReportUrl.value)
+    generatedReportUrl.value = ''
+  }
+  generatedReportBlob.value = null
+
   try {
     console.info('[Report] 开始请求后端生成报告', {
       folder: selectedFolderName.value,
@@ -254,17 +310,12 @@ const runDetection = async () => {
       roundnessThreshold: roundnessThreshold.value
     })
 
-    const downloadName = `${selectedFolderName.value || 'ctc_dataset'}-report.docx`
+    generatedReportBlob.value = blob
     const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = downloadName
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    generatedReportUrl.value = url
+    updatePreviewImage()
 
-    ElMessage.success('报告生成成功，已开始下载')
+    ElMessage.success('报告生成成功，请在预览区域手动导出')
   } catch (error) {
     if (isAxiosError(error)) {
       if (error.code === 'ERR_NETWORK') {
@@ -284,6 +335,10 @@ const runDetection = async () => {
   } finally {
     stopHeartbeat()
     isDetecting.value = false
+    if (!generatedReportBlob.value && generatedReportUrl.value) {
+      revokeObjectUrl(generatedReportUrl.value)
+      generatedReportUrl.value = ''
+    }
   }
 }
 
@@ -315,6 +370,21 @@ const downloadImage = () => {
   link.click()
 }
 
+const downloadDocx = () => {
+  if (!generatedReportBlob.value || !generatedReportUrl.value) {
+    ElMessage.warning('请先生成报告后再导出 Word 文件')
+    return
+  }
+
+  const downloadName = `${selectedFolderName.value || 'ctc_dataset'}-report.docx`
+  const link = document.createElement('a')
+  link.href = generatedReportUrl.value
+  link.download = downloadName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
 const exportToPdf = () => {
   const canvas = canvasRef.value
   if (!canvas) {
@@ -343,6 +413,14 @@ const exportToPdf = () => {
 
 onBeforeUnmount(() => {
   stopHeartbeat()
+  if (generatedReportUrl.value) {
+    revokeObjectUrl(generatedReportUrl.value)
+    generatedReportUrl.value = ''
+  }
+  if (previewImageUrl.value) {
+    revokeObjectUrl(previewImageUrl.value)
+    previewImageUrl.value = ''
+  }
 })
 
 const scheduleRender = () => {
