@@ -2,8 +2,8 @@
   <el-config-provider>
     <div class="app-shell">
       <header class="app-header">
-        <h1 class="app-title">宠物检测报告系统</h1>
-        <p class="app-subtitle">整合宠物信息与识别结果，一键生成专业报告</p>
+        <h1 class="app-title">宠物健康检测报告</h1>
+        <p class="app-subtitle">整合宠物信息与识别结果，一键生成专业报告文本</p>
       </header>
       <main class="app-main">
         <router-view />
@@ -17,7 +17,7 @@
 import { onMounted } from 'vue'
 
 onMounted(() => {
-  console.log('宠物检测报告系统已启动')
+  console.log('宠物健康检测报告应用已启动')
 })
 </script>
 
