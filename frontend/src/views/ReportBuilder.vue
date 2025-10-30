@@ -119,16 +119,37 @@
                   <h3 class="preview-title">检测报告</h3>
                   <p class="preview-generated-at">生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}</p>
                 </div>
-                <img class="preview-logo" src="/report-logo.svg" alt="华芯生物医疗" />
+                <img class="preview-logo" src="/HBI.jpg" alt="华芯生物医疗" />
               </div>
               <section class="preview-section">
                 <h4 class="section-title">基础信息</h4>
-                <ul class="metadata-list">
-                  <li v-for="item in previewMetadata" :key="item.label" class="metadata-item">
-                    <span class="metadata-label">{{ item.label }}</span>
-                    <span class="metadata-value">{{ item.value }}</span>
-                  </li>
-                </ul>
+                <table class="metadata-table">
+                  <tbody>
+                    <tr v-for="(row, rowIndex) in metadataRows" :key="rowIndex">
+                      <template v-for="(cell, cellIndex) in row" :key="cellIndex">
+                        <th class="metadata-heading">
+                          <span v-if="cell">{{ cell.label }}</span>
+                        </th>
+                        <td class="metadata-data">
+                          <span v-if="cell">{{ cell.value }}</span>
+                        </td>
+                      </template>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+              <section v-if="channelPreviewItems.length" class="preview-section">
+                <h4 class="section-title">通道图像</h4>
+                <div class="channel-preview-grid">
+                  <div
+                    v-for="item in channelPreviewItems"
+                    :key="item.label"
+                    class="channel-preview-card"
+                  >
+                    <div class="channel-preview-label">{{ item.label }}</div>
+                    <img :src="item.src" class="channel-preview-image" :alt="`${item.label}预览图`" />
+                  </div>
+                </div>
               </section>
               <footer class="preview-footer">
                 检测人：______________&nbsp;&nbsp;&nbsp;&nbsp;审核人：______________&nbsp;&nbsp;&nbsp;&nbsp;报告日期：______________
@@ -169,6 +190,11 @@ import { isAxiosError } from 'axios'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { getHeartbeat, postGenerateCtcReport } from '../api/api'
 import type { CtcReportResponse, ReportMetadataItem } from '../types/api'
+
+interface ChannelPreviewItem {
+  label: string
+  src: string
+}
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -265,6 +291,31 @@ const previewMetadata = computed<ReportMetadataItem[]>(() => {
     label,
     value: metadataMap.get(label) ?? ''
   }))
+})
+
+const metadataRows = computed(() => {
+  const rows: Array<Array<ReportMetadataItem | null>> = []
+  const items = previewMetadata.value
+  for (let index = 0; index < items.length; index += 2) {
+    rows.push([items[index], items[index + 1] ?? null])
+  }
+  if (!rows.length) {
+    rows.push([null, null])
+  }
+  return rows
+})
+
+const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
+  const items = reportData.value?.imageSet?.items ?? []
+  if (!items.length) {
+    return []
+  }
+  return items
+    .filter(item => item.data)
+    .map(item => ({
+      label: item.label,
+      src: `data:${item.mimeType};base64,${item.data}`
+    }))
 })
 
 const expectedChannels = ['1', '2', '3', '4', '5']
@@ -698,30 +749,77 @@ onBeforeUnmount(() => {
   color: #1f2937;
 }
 
-.metadata-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+.metadata-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: #f8fafc;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.metadata-item {
-  display: flex;
-  gap: 6px;
+.metadata-table tbody tr {
+  background-color: rgba(248, 250, 252, 0.9);
+}
+
+.metadata-table tbody tr:nth-child(odd) {
+  background-color: rgba(255, 255, 255, 0.75);
+}
+
+.metadata-heading,
+.metadata-data {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
   font-size: 14px;
-  color: #1f2937;
 }
 
-.metadata-label {
+.metadata-heading {
+  width: 18%;
+  color: #1d4ed8;
   font-weight: 600;
-  color: #2563eb;
+  text-align: right;
+  background-color: rgba(59, 130, 246, 0.08);
 }
 
-.metadata-value {
-  flex: 1;
-  word-break: break-all;
+.metadata-data {
+  color: #0f172a;
+  word-break: break-word;
+  background-color: rgba(255, 255, 255, 0.86);
+}
+
+.metadata-table tbody tr:last-child .metadata-heading,
+.metadata-table tbody tr:last-child .metadata-data {
+  border-bottom: none;
+}
+
+.channel-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.channel-preview-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(226, 232, 240, 0.85) 100%);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.12);
+}
+
+.channel-preview-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e3a8a;
+  text-align: center;
+}
+
+.channel-preview-image {
+  width: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 6px 16px rgba(30, 64, 175, 0.2);
 }
 
 .preview-footer {
@@ -773,8 +871,9 @@ onBeforeUnmount(() => {
     justify-content: center;
   }
 
-  .metadata-list {
-    grid-template-columns: 1fr;
+  .metadata-heading {
+    width: 24%;
+    text-align: left;
   }
 }
 </style>
