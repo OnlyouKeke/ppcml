@@ -310,7 +310,7 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
 
 
     footer = document.add_paragraph()
-    footer_run = footer.add_run("检测人：______________    审核人：______________    报告日期：______________")
+    footer_run = footer.add_run("检测人：___________    审核人：___________    报告日期：___________")
     _apply_run_style(footer_run, 12, color=RGBColor(75, 85, 99))
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
