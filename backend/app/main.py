@@ -216,79 +216,53 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     _apply_run_style(title_run, 28, bold=True, color=RGBColor(31, 41, 55))
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    generated_at = document.add_paragraph()
-    generated_run = generated_at.add_run(f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    _apply_run_style(generated_run, 12, color=RGBColor(107, 114, 128))
-    generated_at.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
     separator = document.add_paragraph()
     separator_run = separator.add_run("-------------- 分割线 --------------")
     _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    _add_section_heading(document, "最新填写的信息", color=RGBColor(217, 119, 6))
-    meta_table = document.add_table(rows=len(metadata), cols=2)
-    meta_table.style = "Table Grid"
+    info_heading = document.add_paragraph()
+    info_heading_run = info_heading.add_run("之前填写的信息")
+    _apply_run_style(info_heading_run, 16, bold=True, color=RGBColor(217, 119, 6))
+    info_heading.paragraph_format.space_before = Pt(12)
+    info_heading.paragraph_format.space_after = Pt(6)
 
-    for index, (label, value) in enumerate(metadata.items()):
-        left_cell, right_cell = meta_table.rows[index].cells
-        _set_cell_text(left_cell, label, bold=True, color=RGBColor(217, 119, 6), fill="FFF7ED")
-        _set_cell_text(right_cell, value or "未填写", color=RGBColor(31, 41, 55))
+    for label, value in metadata.items():
+        info_paragraph = document.add_paragraph()
+        info_run = info_paragraph.add_run(f"{label}：{value}")
+        _apply_run_style(info_run, 12, color=RGBColor(31, 41, 55))
 
-    document.add_paragraph()
-    _add_section_heading(document, "检测结果", color=RGBColor(37, 99, 235))
+    result_heading = document.add_paragraph()
+    result_heading_run = result_heading.add_run("检测结果")
+    _apply_run_style(result_heading_run, 16, bold=True, color=RGBColor(37, 99, 235))
+    result_heading.paragraph_format.space_before = Pt(12)
+    result_heading.paragraph_format.space_after = Pt(6)
 
     doc_names = analyzer.results.get("doc_names", [])
     ctc_counts = analyzer.results.get("green_single_channel", [])
     wbc_counts = analyzer.results.get("white_single_channel", [])
 
-    if doc_names:
-        summary_table = document.add_table(rows=len(doc_names) + 1, cols=3)
-        summary_table.style = "Table Grid"
-        header_row = summary_table.rows[0]
-        headers = ["检测区域", "CTC计数", "白细胞计数"]
-        for cell, header in zip(header_row.cells, headers):
-            _set_cell_text(cell, header, bold=True, color=RGBColor(37, 99, 235), fill="DBEAFE")
+    total_ctc = sum(ctc_counts)
+    total_wbc = sum(wbc_counts)
 
-        for idx, name in enumerate(doc_names):
-            row = summary_table.rows[idx + 1]
-            _set_cell_text(row.cells[0], name, color=RGBColor(55, 65, 81))
-            ctc_value = str(ctc_counts[idx]) if idx < len(ctc_counts) else "0"
-            wbc_value = str(wbc_counts[idx]) if idx < len(wbc_counts) else "0"
-            _set_cell_text(row.cells[1], ctc_value, color=RGBColor(55, 65, 81))
-            _set_cell_text(row.cells[2], wbc_value, color=RGBColor(55, 65, 81))
+    selection_paragraph = document.add_paragraph()
+    selection_run = selection_paragraph.add_run("选三张不同荧光同一区域的照片，有方框标出是CTC。")
+    _apply_run_style(selection_run, 12, color=RGBColor(55, 65, 81))
 
-        total_ctc = sum(ctc_counts)
-        total_wbc = sum(wbc_counts)
+    result_text = (
+        f"结果说明：经实验结果判定，在一二通道中找到CD45{total_wbc}个，CK{total_ctc}个。"
+        if doc_names
+        else "结果说明：未能识别出有效的检测结果，请检查上传的影像资料。"
+    )
+    result_paragraph = document.add_paragraph()
+    result_run = result_paragraph.add_run(result_text)
+    _apply_run_style(result_run, 12, color=RGBColor(220, 38, 38) if doc_names else RGBColor(107, 114, 128))
 
-        highlight = document.add_paragraph()
-        highlight_run = highlight.add_run(
-            f"选取了 {len(doc_names)} 个检测区域，综合识别出 {total_ctc} 个疑似CTC细胞，{total_wbc} 个疑似白细胞。"
-        )
-        _apply_run_style(highlight_run, 12, color=RGBColor(220, 38, 38))
-
-        reminder = document.add_paragraph()
-        reminder_run = reminder.add_run("请确认不同荧光通道同一区域的代表性照片，确保检测结果准确可靠。")
-        _apply_run_style(reminder_run, 12, color=RGBColor(234, 88, 12))
-    else:
-        empty_result = document.add_paragraph()
-        empty_run = empty_result.add_run("未从上传的数据中提取到有效的统计结果，请检查文件夹结构与图像质量。")
-        _apply_run_style(empty_run, 12, color=RGBColor(71, 85, 105))
-
-    document.add_paragraph()
-    _add_section_heading(document, "结论与建议", color=RGBColor(21, 128, 61))
-
-    conclusion = document.add_paragraph()
-    conclusion_run = conclusion.add_run("结果：在不同荧光通道中检出疑似CTC细胞，请结合临床表现综合判断。")
-    _apply_run_style(conclusion_run, 12, color=RGBColor(30, 64, 45))
-
-    advice = document.add_paragraph()
-    advice_run = advice.add_run("建议：本检测报告仅供临床诊断参考，建议结合影像学及实验室其他指标。")
-    _apply_run_style(advice_run, 12, color=RGBColor(30, 64, 45))
-
-    notes_paragraph = document.add_paragraph()
-    notes_run = notes_paragraph.add_run(f"备注信息：{metadata.get('备注', '无') or '无'}")
-    _apply_run_style(notes_run, 12, color=RGBColor(55, 65, 81))
+    notes_value = metadata.get("备注", "无") or "无"
+    biomarker_text = notes_value if notes_value not in {"无", "未填写"} else "______________"
+    remark_paragraph = document.add_paragraph()
+    remark_run = remark_paragraph.add_run(f"备注：生物标记物染色选用{biomarker_text}。")
+    _apply_run_style(remark_run, 12, color=RGBColor(30, 64, 45))
 
     footer = document.add_paragraph()
     footer_run = footer.add_run("检测人：______________    审核人：______________    报告日期：______________")
