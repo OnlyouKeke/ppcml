@@ -28,6 +28,9 @@ class CTCAnalyzer:
         self.file_save_path = file_save_path
         self.roundness_threshold = roundness_threshold
 
+        # 输出图像右上角添加的 logo
+        self.logo = self._load_logo()
+
         # 子文件夹列表
         self.sub_file_path_list = ['1', '2', '3', '4', '5']
 
@@ -45,6 +48,79 @@ class CTCAnalyzer:
             'roundness_values': [],
             'ctc_image_sets': []
         }
+
+    def _load_logo(self) -> Optional[np.ndarray]:
+        """加载输出图像使用的 logo"""
+        logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
+
+        if not logo_path.exists():
+            logger.warning("未找到 logo 文件: %s", logo_path)
+            return None
+
+        logo = cv2.imread(str(logo_path), cv2.IMREAD_UNCHANGED)
+
+        if logo is None:
+            logger.warning("无法读取 logo 文件: %s", logo_path)
+
+        return logo
+
+    def _add_logo(self, image: np.ndarray) -> np.ndarray:
+        """在图像右上角添加 logo"""
+        if self.logo is None or image is None:
+            return image
+
+        # 仅对三通道或四通道图像添加 logo
+        if image.ndim != 3 or image.shape[2] not in (3, 4):
+            return image
+
+        logo = self.logo
+
+        # 如果 logo 的 alpha 通道缺失，创建一个不透明的 alpha 通道
+        if logo.shape[2] == 3:
+            alpha = np.ones(logo.shape[:2], dtype=logo.dtype) * 255
+            logo = np.dstack((logo, alpha))
+
+        img_h, img_w = image.shape[:2]
+        logo_h, logo_w = logo.shape[:2]
+
+        # 如果 logo 大于图像，则按比例缩小，最大宽高为图像的 1/4
+        scale = min(img_w / (4 * logo_w), img_h / (4 * logo_h), 1.0)
+        if scale < 1.0:
+            logo = cv2.resize(logo, (int(logo_w * scale), int(logo_h * scale)), interpolation=cv2.INTER_AREA)
+
+        logo_h, logo_w = logo.shape[:2]
+        margin = 10
+        if logo_h + margin > img_h or logo_w + margin > img_w:
+            # 如果图像尺寸仍然过小，放弃添加 logo
+            return image
+
+        y_start = margin
+        y_end = y_start + logo_h
+        x_end = img_w - margin
+        x_start = x_end - logo_w
+
+        # 为避免修改输入图像，创建副本
+        result = image.copy()
+
+        roi = result[y_start:y_end, x_start:x_end]
+
+        # 将 ROI 转为 BGRA 以便于 alpha 混合
+        roi_bgra = cv2.cvtColor(roi, cv2.COLOR_BGR2BGRA) if roi.shape[2] == 3 else roi.copy()
+
+        logo_bgra = logo
+
+        alpha_logo = logo_bgra[:, :, 3] / 255.0
+        alpha_roi = 1.0 - alpha_logo
+
+        for c in range(3):
+            roi_bgra[:, :, c] = (alpha_logo * logo_bgra[:, :, c] + alpha_roi * roi_bgra[:, :, c]).astype(result.dtype)
+
+        # 如果原图是 BGR，则转换回 BGR
+        blended = cv2.cvtColor(roi_bgra, cv2.COLOR_BGRA2BGR) if roi.shape[2] == 3 else roi_bgra
+
+        result[y_start:y_end, x_start:x_end] = blended
+
+        return result
 
     def compute_roundness(self, label_image: np.ndarray) -> Tuple[List, List]:
         """
@@ -456,9 +532,13 @@ class CTCAnalyzer:
         mask_name = f"{blue_stem}_mask{blue_path.suffix}"
         mask_path = save_folder / mask_name
 
-        cv2.imwrite(str(blue_path), blue_img)
-        cv2.imwrite(str(green_path), green_img)
-        cv2.imwrite(str(red_path), red_img)
+        blue_with_logo = self._add_logo(blue_img)
+        green_with_logo = self._add_logo(green_img)
+        red_with_logo = self._add_logo(red_img)
+
+        cv2.imwrite(str(blue_path), blue_with_logo)
+        cv2.imwrite(str(green_path), green_with_logo)
+        cv2.imwrite(str(red_path), red_with_logo)
         cv2.imwrite(str(mask_path), segmented_mask)
 
         return str(blue_path), str(green_path), str(red_path), str(mask_path)
@@ -489,9 +569,13 @@ class CTCAnalyzer:
         green_path = highlight_folder / f"{Path(green_name).stem}_ctc{Path(green_name).suffix}"
         red_path = highlight_folder / f"{Path(red_name).stem}_ctc{Path(red_name).suffix}"
 
-        cv2.imwrite(str(blue_path), blue_img)
-        cv2.imwrite(str(green_path), green_img)
-        cv2.imwrite(str(red_path), red_img)
+        blue_with_logo = self._add_logo(blue_img)
+        green_with_logo = self._add_logo(green_img)
+        red_with_logo = self._add_logo(red_img)
+
+        cv2.imwrite(str(blue_path), blue_with_logo)
+        cv2.imwrite(str(green_path), green_with_logo)
+        cv2.imwrite(str(red_path), red_with_logo)
 
         return str(blue_path), str(green_path), str(red_path)
 
