@@ -10,8 +10,10 @@ if hasattr(sys.stdout, 'reconfigure'):
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
     
+import base64
 import shutil
 import io
+import mimetypes
 import tempfile
 import time
 import zipfile
@@ -27,8 +29,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from starlette.background import BackgroundTask
+from fastapi.responses import JSONResponse
 
 try:
     from .ctc import CTCAnalyzer
@@ -472,13 +473,87 @@ async def generate_ctc_report(
         _build_report_document(analyzer, metadata, report_path)
         logger.info("报告已生成：%s", report_path)
 
-        background = BackgroundTask(lambda: shutil.rmtree(work_dir, ignore_errors=True))
-        return FileResponse(
-            report_path,
-            filename="ctc_report.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            background=background,
+        report_bytes = report_path.read_bytes()
+        encoded_report = base64.b64encode(report_bytes).decode("ascii")
+
+        metadata_items = [
+            {"label": label, "value": value}
+            for label, value in metadata.items()
+        ]
+
+        doc_names = analyzer.results.get("doc_names", [])
+        ctc_counts = analyzer.results.get("green_single_channel", [])
+        wbc_counts = analyzer.results.get("white_single_channel", [])
+        channel_stats = [
+            {"channel": name, "ctc": ctc, "wbc": wbc}
+            for name, ctc, wbc in zip(doc_names, ctc_counts, wbc_counts)
+        ]
+
+        total_ctc = sum(ctc_counts)
+        total_wbc = sum(wbc_counts)
+
+        selection_text = "选三张不同荧光同一区域的照片，有方框标出是CTC。"
+
+        ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
+        image_set_payload: dict | None = None
+        if ctc_image_sets:
+            first_set = ctc_image_sets[0]
+            images_payload = []
+            for label, key in (
+                ("蓝色通道", "blue_path"),
+                ("绿色通道", "green_path"),
+                ("红色通道", "red_path"),
+            ):
+                image_path = first_set.get(key)
+                if not image_path or not os.path.exists(image_path):
+                    continue
+                mime_type, _ = mimetypes.guess_type(image_path)
+                try:
+                    image_bytes = Path(image_path).read_bytes()
+                except OSError:
+                    logger.warning("无法读取预览图像：%s", image_path)
+                    continue
+                images_payload.append(
+                    {
+                        "label": label,
+                        "mimeType": mime_type or "image/png",
+                        "data": base64.b64encode(image_bytes).decode("ascii"),
+                    }
+                )
+
+            if images_payload:
+                image_set_payload = {"items": images_payload}
+
+        result_text = (
+            f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
+            if doc_names
+            else "结果说明：未识别出有效的检测结果，请检查上传的影像资料。"
         )
+
+        notes_value = metadata.get("备注", "无") or "无"
+        biomarker_text = notes_value if notes_value not in {"无", "未填写"} else "______________"
+        remark_text = f"备注：生物标记物染色选用{biomarker_text}。"
+
+        response_payload = {
+            "fileName": "ctc_report.docx",
+            "fileContent": encoded_report,
+            "generatedAt": datetime.utcnow().isoformat() + "Z",
+            "metadata": metadata_items,
+            "channels": channel_stats,
+            "totals": {
+                "totalCtc": total_ctc,
+                "totalWbc": total_wbc,
+            },
+            "resultText": result_text,
+            "remarkText": remark_text,
+            "selectionText": selection_text,
+            "hasCtcImages": bool(image_set_payload),
+            "imageSet": image_set_payload,
+            "warnings": [],
+        }
+
+        shutil.rmtree(work_dir, ignore_errors=True)
+        return JSONResponse(content=response_payload)
     except zipfile.BadZipFile as exc:
         if work_dir is not None:
             shutil.rmtree(work_dir, ignore_errors=True)
