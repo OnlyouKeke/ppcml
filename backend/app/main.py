@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import os
 import shutil
 import sys
@@ -12,7 +13,9 @@ from typing import Iterable, List
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Pt, RGBColor
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -21,11 +24,20 @@ from starlette.background import BackgroundTask
 from .ctc import CTCAnalyzer
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s %(name)s - %(message)s",
+    stream=sys.stdout,
+)
+
+logger = logging.getLogger("ctc_app")
+
+
 def verify_startup_token() -> None:
     """验证启动token，确保只能通过前端启动"""
     token = os.environ.get("FASTAPI_STARTUP_TOKEN")
     if not token:
-        print("错误：缺少启动token，此应用只能通过前端启动")
+        logger.error("错误：缺少启动token，此应用只能通过前端启动")
         sys.exit(1)
 
     try:
@@ -34,17 +46,17 @@ def verify_startup_token() -> None:
         current_time = int(time.time())
 
         if current_time - timestamp > 60:
-            print("错误：启动token已过期")
+            logger.error("错误：启动token已过期")
             sys.exit(1)
 
         expected_hash = hashlib.sha256(f"fastapi_startup_{timestamp}".encode()).hexdigest()[:16]
         if hash_part != expected_hash:
-            print("错误：无效的启动token")
+            logger.error("错误：无效的启动token")
             sys.exit(1)
 
-        print("启动token验证成功")
+        logger.info("启动token验证成功")
     except (ValueError, IndexError):
-        print("错误：启动token格式无效")
+        logger.error("错误：启动token格式无效")
         sys.exit(1)
 
 
@@ -103,11 +115,60 @@ def _create_metadata_entries(
     return entries
 
 
-def _apply_font_size(paragraphs: Iterable) -> None:
+def _apply_run_style(run, size: int, bold: bool = False, color: RGBColor | None = None) -> None:
+    font = run.font
+    font.size = Pt(size)
+    font.bold = bold
+    font.name = "SimSun"
+    if color is not None:
+        font.color.rgb = color
+
+    r_pr = run._element.get_or_add_rPr()
+    r_fonts = r_pr.rFonts
+    if r_fonts is None:
+        r_fonts = OxmlElement("w:rFonts")
+        r_pr.append(r_fonts)
+    r_fonts.set(qn("w:eastAsia"), "SimSun")
+
+
+def _apply_font_size(paragraphs: Iterable, *, size: int = 12) -> None:
     for paragraph in paragraphs:
         for run in paragraph.runs:
-            run.font.size = Pt(12)
-            run.font.name = "SimSun"
+            _apply_run_style(run, size)
+
+
+def _set_cell_text(
+    cell,
+    text: str,
+    *,
+    bold: bool = False,
+    color: RGBColor | None = None,
+    fill: str | None = None,
+) -> None:
+    cell.text = ""
+    paragraph = cell.paragraphs[0]
+    run = paragraph.add_run(text)
+    _apply_run_style(run, 12, bold=bold, color=color)
+    paragraph.paragraph_format.space_after = Pt(0)
+
+    if fill is not None:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        for child in list(tc_pr):
+            if child.tag == qn("w:shd"):
+                tc_pr.remove(child)
+        shading = OxmlElement("w:shd")
+        shading.set(qn("w:val"), "clear")
+        shading.set(qn("w:color"), "auto")
+        shading.set(qn("w:fill"), fill)
+        tc_pr.append(shading)
+
+
+def _add_section_heading(document: Document, text: str, *, color: RGBColor) -> None:
+    paragraph = document.add_paragraph()
+    run = paragraph.add_run(text)
+    _apply_run_style(run, 16, bold=True, color=color)
+    paragraph.paragraph_format.space_before = Pt(12)
+    paragraph.paragraph_format.space_after = Pt(6)
 
 
 def _populate_table(table, rows: List[List[str]]) -> None:
@@ -120,18 +181,33 @@ def _populate_table(table, rows: List[List[str]]) -> None:
 
 def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str], output_path: Path) -> None:
     document = Document()
-    title = document.add_heading("检测报告", level=0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    document.add_paragraph(f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    title_paragraph = document.add_paragraph()
+    title_run = title_paragraph.add_run("检测报告")
+    _apply_run_style(title_run, 28, bold=True, color=RGBColor(31, 41, 55))
+    title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    document.add_heading("最新输入的信息", level=1)
+    generated_at = document.add_paragraph()
+    generated_run = generated_at.add_run(f"生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    _apply_run_style(generated_run, 12, color=RGBColor(107, 114, 128))
+    generated_at.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    separator = document.add_paragraph()
+    separator_run = separator.add_run("-------------- 分割线 --------------")
+    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
+    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    _add_section_heading(document, "最新填写的信息", color=RGBColor(217, 119, 6))
     meta_table = document.add_table(rows=len(metadata), cols=2)
     meta_table.style = "Table Grid"
-    _populate_table(meta_table, [[label, value] for label, value in metadata.items()])
+
+    for index, (label, value) in enumerate(metadata.items()):
+        left_cell, right_cell = meta_table.rows[index].cells
+        _set_cell_text(left_cell, label, bold=True, color=RGBColor(217, 119, 6), fill="FFF7ED")
+        _set_cell_text(right_cell, value or "未填写", color=RGBColor(31, 41, 55))
 
     document.add_paragraph()
-    document.add_heading("检测结果", level=1)
+    _add_section_heading(document, "检测结果", color=RGBColor(37, 99, 235))
 
     doc_names = analyzer.results.get("doc_names", [])
     ctc_counts = analyzer.results.get("green_single_channel", [])
@@ -140,26 +216,55 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     if doc_names:
         summary_table = document.add_table(rows=len(doc_names) + 1, cols=3)
         summary_table.style = "Table Grid"
-        header_values = ["检测区域", "CTC计数", "白细胞计数"]
-        _populate_table(summary_table, [header_values] + [[doc_names[i], str(ctc_counts[i]), str(wbc_counts[i])] for i in range(len(doc_names))])
+        header_row = summary_table.rows[0]
+        headers = ["检测区域", "CTC计数", "白细胞计数"]
+        for cell, header in zip(header_row.cells, headers):
+            _set_cell_text(cell, header, bold=True, color=RGBColor(37, 99, 235), fill="DBEAFE")
+
+        for idx, name in enumerate(doc_names):
+            row = summary_table.rows[idx + 1]
+            _set_cell_text(row.cells[0], name, color=RGBColor(55, 65, 81))
+            ctc_value = str(ctc_counts[idx]) if idx < len(ctc_counts) else "0"
+            wbc_value = str(wbc_counts[idx]) if idx < len(wbc_counts) else "0"
+            _set_cell_text(row.cells[1], ctc_value, color=RGBColor(55, 65, 81))
+            _set_cell_text(row.cells[2], wbc_value, color=RGBColor(55, 65, 81))
 
         total_ctc = sum(ctc_counts)
         total_wbc = sum(wbc_counts)
-        document.add_paragraph(
-            f"综合分析：在上传的数据集中共识别出 {total_ctc} 个疑似CTC细胞，"
-            f"{total_wbc} 个疑似白细胞。"
+
+        highlight = document.add_paragraph()
+        highlight_run = highlight.add_run(
+            f"选取了 {len(doc_names)} 个检测区域，综合识别出 {total_ctc} 个疑似CTC细胞，{total_wbc} 个疑似白细胞。"
         )
+        _apply_run_style(highlight_run, 12, color=RGBColor(220, 38, 38))
+
+        reminder = document.add_paragraph()
+        reminder_run = reminder.add_run("请确认不同荧光通道同一区域的代表性照片，确保检测结果准确可靠。")
+        _apply_run_style(reminder_run, 12, color=RGBColor(234, 88, 12))
     else:
-        document.add_paragraph("未从上传的数据中提取到有效的统计结果。")
+        empty_result = document.add_paragraph()
+        empty_run = empty_result.add_run("未从上传的数据中提取到有效的统计结果，请检查文件夹结构与图像质量。")
+        _apply_run_style(empty_run, 12, color=RGBColor(71, 85, 105))
 
     document.add_paragraph()
-    document.add_heading("结论与建议", level=1)
-    document.add_paragraph("结果：经实验室检验，在不同荧光通道中检出疑似CTC细胞。")
-    document.add_paragraph("建议：本检测报告仅供临床诊断参考，请结合临床症状综合评估。")
-    document.add_paragraph("备注信息：" + metadata.get("备注", "无"))
+    _add_section_heading(document, "结论与建议", color=RGBColor(21, 128, 61))
 
-    signature = document.add_paragraph("医师签名：____________________")
-    signature.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    conclusion = document.add_paragraph()
+    conclusion_run = conclusion.add_run("结果：在不同荧光通道中检出疑似CTC细胞，请结合临床表现综合判断。")
+    _apply_run_style(conclusion_run, 12, color=RGBColor(30, 64, 45))
+
+    advice = document.add_paragraph()
+    advice_run = advice.add_run("建议：本检测报告仅供临床诊断参考，建议结合影像学及实验室其他指标。")
+    _apply_run_style(advice_run, 12, color=RGBColor(30, 64, 45))
+
+    notes_paragraph = document.add_paragraph()
+    notes_run = notes_paragraph.add_run(f"备注信息：{metadata.get('备注', '无') or '无'}")
+    _apply_run_style(notes_run, 12, color=RGBColor(55, 65, 81))
+
+    footer = document.add_paragraph()
+    footer_run = footer.add_run("检测人：______________    审核人：______________    报告日期：______________")
+    _apply_run_style(footer_run, 12, color=RGBColor(75, 85, 99))
+    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     document.save(output_path)
 
@@ -257,6 +362,14 @@ async def generate_ctc_report(
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
 ) -> FileResponse:
+    uploaded_files = files or []
+    logger.info(
+        "收到CTC报告生成请求：zip文件=%s，多文件数量=%d，圆度阈值=%.2f",
+        bool(file and file.filename),
+        len(uploaded_files),
+        roundness_threshold,
+    )
+
     if (file is None or not file.filename) and not files:
         raise HTTPException(status_code=400, detail="请上传包含影像数据的ZIP文件或文件夹")
 
@@ -273,13 +386,17 @@ async def generate_ctc_report(
                 raise HTTPException(status_code=400, detail="上传文件内容为空")
 
             work_dir, dataset_root, output_dir = _prepare_workdir(contents)
+            logger.info("已从ZIP文件提取数据，工作目录：%s", work_dir)
         elif files:
             work_dir, dataset_root, output_dir = await _prepare_workdir_from_files(files)
+            logger.info("已接收多文件上传，工作目录：%s", work_dir)
         else:
             raise HTTPException(status_code=400, detail="未提供有效的影像数据")
 
         analyzer = CTCAnalyzer(str(dataset_root), str(output_dir), roundness_threshold=roundness_threshold)
+        logger.info("开始处理影像数据，数据根目录：%s", dataset_root)
         analyzer.process_all_images()
+        logger.info("图像处理完成，生成统计结果：%s", analyzer.results.get("doc_names", []))
 
         metadata = _create_metadata_entries(
             pet_name,
@@ -291,9 +408,14 @@ async def generate_ctc_report(
             mass_location,
             notes,
         )
+        logger.info(
+            "报告元数据：%s",
+            {key: metadata[key] for key in metadata},
+        )
 
         report_path = output_dir / "ctc_report.docx"
         _build_report_document(analyzer, metadata, report_path)
+        logger.info("报告已生成：%s", report_path)
 
         background = BackgroundTask(lambda: shutil.rmtree(work_dir, ignore_errors=True))
         return FileResponse(
@@ -311,6 +433,7 @@ async def generate_ctc_report(
             shutil.rmtree(work_dir, ignore_errors=True)
         raise
     except Exception as exc:
+        logger.exception("生成CTC报告时出现未预期错误")
         if work_dir is not None:
             shutil.rmtree(work_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail="生成报告时发生未知错误") from exc
@@ -329,7 +452,7 @@ if __name__ == "__main__":
     try:
         port = int(port_str)
     except ValueError:
-        print(f"警告：FASTAPI_PORT 设置无效（{port_str}），使用默认端口 8001")
+        logger.warning("警告：FASTAPI_PORT 设置无效（%s），使用默认端口 8001", port_str)
         port = 8001
 
     uvicorn.run(app, host="0.0.0.0", port=port)
