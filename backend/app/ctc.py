@@ -1,3 +1,4 @@
+import logging
 import os
 import cv2
 import math
@@ -5,6 +6,9 @@ from typing import Tuple, List, Optional
 import numpy as np
 import scipy.signal as ss
 from skimage import morphology, filters, segmentation
+
+
+logger = logging.getLogger(__name__)
 
 
 class CTCAnalyzer:
@@ -243,10 +247,10 @@ class CTCAnalyzer:
 
         # 检查对应的绿色和红色图像是否存在
         if not os.path.exists(green_image_path):
-            print(f"警告: 找不到绿色图像 {green_image_path}")
+            logger.warning("警告: 找不到绿色图像 %s", green_image_path)
             return 0, 0
         if not os.path.exists(red_image_path):
-            print(f"警告: 找不到红色图像 {red_image_path}")
+            logger.warning("警告: 找不到红色图像 %s", red_image_path)
             return 0, 0
 
         # 预处理图像
@@ -409,7 +413,7 @@ class CTCAnalyzer:
             folder_path = os.path.join(self.file_path, sub_folder)
 
             if not os.path.exists(folder_path):
-                print(f"警告: 文件夹 {folder_path} 不存在，跳过")
+                logger.warning("警告: 文件夹 %s 不存在，跳过", folder_path)
                 continue
 
             ctc_total = 0
@@ -426,24 +430,24 @@ class CTCAnalyzer:
                 base_name = os.path.splitext(file_name)[0]  # 去除扩展名
                 if len(base_name) > 0 and base_name[-1].lower() == 'b':
                     try:
-                        print(f"处理蓝色图像: {file_name}")
+                        logger.info("处理蓝色图像: %s", file_name)
                         ctc_count, wbc_count = self.process_single_image(file_path_full, sub_folder)
                         ctc_total += ctc_count
                         wbc_total += wbc_count
-                        print(f"  - CTC: {ctc_count}, WBC: {wbc_count}")
+                        logger.info("  - CTC: %s, WBC: %s", ctc_count, wbc_count)
 
                     except Exception as e:
-                        print(f"处理图像 {file_path_full} 时出错: {e}")
+                        logger.exception("处理图像 %s 时出错", file_path_full)
                         continue
                 else:
-                    print(f"跳过非蓝色图像: {file_name}")
+                    logger.debug("跳过非蓝色图像: %s", file_name)
 
             # 保存该文件夹的结果
             self.results['green_single_channel'].append(ctc_total)
             self.results['white_single_channel'].append(wbc_total)
             self.results['doc_names'].append(sub_folder)
 
-            print(f"通道 {sub_folder} 统计: CTC总数={ctc_total}, WBC总数={wbc_total}")
+            logger.info("通道 %s 统计: CTC总数=%s, WBC总数=%s", sub_folder, ctc_total, wbc_total)
 
         # 保存结果到文件
         self._save_results_to_file(txt_save_name)
@@ -468,7 +472,7 @@ def main():
 
     analyzer = CTCAnalyzer(file_path, file_save_path)
     analyzer.process_all_images()
-    print("处理完成！")
+    logger.info("处理完成！")
 
 
 if __name__ == "__main__":
