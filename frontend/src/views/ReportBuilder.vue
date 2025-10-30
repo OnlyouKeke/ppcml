@@ -108,8 +108,8 @@
 <script lang="ts" setup>
 import { ElMessage } from 'element-plus'
 import { isAxiosError } from 'axios'
-import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { postGenerateCtcReport } from '../api/api'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { getHeartbeat, postGenerateCtcReport } from '../api/api'
 import type { Detection } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
@@ -141,6 +141,11 @@ const detections = ref<Detection[]>([])
 const isDetecting = ref(false)
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const roundnessThreshold = ref(0.3)
+
+const heartbeatIntervalMs = 5000
+let heartbeatTimer: number | null = null
+let heartbeatFailureCount = 0
+let heartbeatDisconnectNotified = false
 
 const hasReport = computed(() => Boolean(imageSrc.value))
 
@@ -233,6 +238,7 @@ const runDetection = async () => {
       roundnessThreshold: roundnessThreshold.value
     })
     isDetecting.value = true
+    startHeartbeat()
     const blob = await postGenerateCtcReport({
       files: selectedFiles.value,
       form: {
@@ -260,14 +266,23 @@ const runDetection = async () => {
 
     ElMessage.success('报告生成成功，已开始下载')
   } catch (error) {
-    if (isAxiosError(error) && error.code === 'ERR_NETWORK') {
-      console.error('[Report] 无法连接后端服务', error)
-      ElMessage.error('无法连接后端服务，请确认FastAPI接口已启动（默认端口 8001）。')
+    if (isAxiosError(error)) {
+      if (error.code === 'ERR_NETWORK') {
+        console.error('[Report] 无法连接后端服务', error)
+        ElMessage.error('无法连接后端服务，请确认FastAPI接口已启动（默认端口 8001）。')
+      } else if (error.code === 'ECONNABORTED') {
+        console.error('[Report] 生成报告请求超时', error)
+        ElMessage.error('生成报告超时，请检查后端处理是否正常或稍后重试')
+      } else {
+        console.error('[Report] 生成报告失败', error)
+        ElMessage.error('生成报告失败，请稍后重试')
+      }
     } else {
       console.error('[Report] 生成报告失败', error)
       ElMessage.error('生成报告失败，请稍后重试')
     }
   } finally {
+    stopHeartbeat()
     isDetecting.value = false
   }
 }
@@ -326,10 +341,56 @@ const exportToPdf = () => {
   printWindow.print()
 }
 
+onBeforeUnmount(() => {
+  stopHeartbeat()
+})
+
 const scheduleRender = () => {
   nextTick(() => {
     void drawReport()
   })
+}
+
+const startHeartbeat = () => {
+  if (heartbeatTimer !== null) {
+    return
+  }
+
+  console.info('[Report] 启动心跳检测', { interval: heartbeatIntervalMs })
+  heartbeatFailureCount = 0
+  heartbeatDisconnectNotified = false
+
+  heartbeatTimer = window.setInterval(async () => {
+    try {
+      await getHeartbeat()
+      if (heartbeatFailureCount > 0) {
+        console.info('[Report] 心跳检测已恢复')
+      }
+      heartbeatFailureCount = 0
+      heartbeatDisconnectNotified = false
+    } catch (error) {
+      heartbeatFailureCount += 1
+      console.warn('[Report] 心跳检测失败', { count: heartbeatFailureCount, error })
+
+      if (heartbeatFailureCount === 1) {
+        ElMessage.warning('检测报告正在生成，请耐心等待（正在保持与后端的连接）')
+      } else if (heartbeatFailureCount >= 3 && !heartbeatDisconnectNotified) {
+        ElMessage.error('后端长时间未响应，请检查服务是否正常运行')
+        heartbeatDisconnectNotified = true
+      }
+    }
+  }, heartbeatIntervalMs)
+}
+
+const stopHeartbeat = () => {
+  if (heartbeatTimer !== null) {
+    window.clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+    console.info('[Report] 已停止心跳检测')
+  }
+
+  heartbeatFailureCount = 0
+  heartbeatDisconnectNotified = false
 }
 
 const drawReport = async () => {

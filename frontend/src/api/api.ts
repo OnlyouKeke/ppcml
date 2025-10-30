@@ -1,5 +1,5 @@
 import axios, { isAxiosError } from 'axios'
-import type { ApiResponse, DetectionResponse } from '../types/api'
+import type { ApiResponse, DetectionResponse, HeartbeatResponse } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -17,7 +17,7 @@ console.info('[API] Backend URL resolved to:', isElectron ? backendUrl ?? defaul
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
   baseURL: isElectron ? backendUrl ?? defaultBackendUrl : '/api',
-  timeout: 5000,
+  timeout: 300000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -99,6 +99,10 @@ export const getHello = async (name: string): Promise<ApiResponse> => {
   return await api.get(`/hello/${name}`)
 }
 
+export const getHeartbeat = async (): Promise<HeartbeatResponse> => {
+  return await api.get('/healthz', { timeout: 5000 })
+}
+
 // 上传图片并进行目标检测
 export const postDetect = async (file: File): Promise<DetectionResponse> => {
   const formData = new FormData()
@@ -160,7 +164,8 @@ export const postGenerateCtcReport = async ({
       headers: {
         'Content-Type': 'multipart/form-data'
       },
-      responseType: 'blob'
+      responseType: 'blob',
+      timeout: 300000
     })
 
     console.debug('[API] Received CTC report response', {
