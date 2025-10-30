@@ -2,6 +2,7 @@ import logging
 import os
 import cv2
 import math
+from pathlib import Path
 from typing import Tuple, List, Optional
 import numpy as np
 import scipy.signal as ss
@@ -41,7 +42,8 @@ class CTCAnalyzer:
             'doc_names': [],
             'file_names': [],
             'all_areas': [],
-            'roundness_values': []
+            'roundness_values': [],
+            'ctc_image_sets': []
         }
 
     def compute_roundness(self, label_image: np.ndarray) -> Tuple[List, List]:
@@ -297,6 +299,11 @@ class CTCAnalyzer:
         enhanced_green_with_boxes = enhanced_green.copy()
         enhanced_red_with_boxes = enhanced_red.copy()
 
+        ctc_only_blue = enhanced_blue.copy()
+        ctc_only_green = enhanced_green.copy()
+        ctc_only_red = enhanced_red.copy()
+        found_ctc = False
+
         for i, (contour, roundness) in enumerate(zip(contours, roundness_values)):
             area = cv2.contourArea(contour)
             bounding_rect = cv2.boundingRect(contour)
@@ -313,9 +320,15 @@ class CTCAnalyzer:
 
                 if is_ctc:
                     ctc_count += 1
+                    found_ctc = True
                     # 在增强后的图像上标记细胞
                     self._mark_cell(enhanced_blue_with_boxes, enhanced_green_with_boxes,
                                     enhanced_red_with_boxes, bounding_rect, 'ctc')
+                    self._draw_rectangle(
+                        [ctc_only_blue, ctc_only_green, ctc_only_red],
+                        bounding_rect,
+                        (255, 255, 255)
+                    )
 
                 elif is_wbc:
                     wbc_count += 1
@@ -324,8 +337,36 @@ class CTCAnalyzer:
                                     enhanced_red_with_boxes, bounding_rect, 'wbc')
 
         # 保存增强后的结果图像（带框选）
-        self._save_results(enhanced_blue_with_boxes, enhanced_green_with_boxes,
-                           enhanced_red_with_boxes, segmented_mask, sub_folder, file_name)
+        blue_save_path, green_save_path, red_save_path, _ = self._save_results(
+            enhanced_blue_with_boxes,
+            enhanced_green_with_boxes,
+            enhanced_red_with_boxes,
+            segmented_mask,
+            sub_folder,
+            file_name,
+            green_file,
+            red_file
+        )
+
+        if found_ctc:
+            ctc_blue_path, ctc_green_path, ctc_red_path = self._save_ctc_highlights(
+                ctc_only_blue,
+                ctc_only_green,
+                ctc_only_red,
+                sub_folder,
+                file_name,
+                green_file,
+                red_file
+            )
+            self.results['ctc_image_sets'].append({
+                'sub_folder': sub_folder,
+                'blue_path': ctc_blue_path,
+                'green_path': ctc_green_path,
+                'red_path': ctc_red_path,
+                'blue_original': blue_save_path,
+                'green_original': green_save_path,
+                'red_original': red_save_path
+            })
 
         return ctc_count, wbc_count
 
@@ -377,11 +418,19 @@ class CTCAnalyzer:
         for img in [blue_img, green_img, red_img]:
             cv2.rectangle(img, (x, y), (x + w, y + h), color, 1)
 
+    def _draw_rectangle(self, images: List[np.ndarray], bounding_rect: Tuple,
+                        color: Tuple[int, int, int]) -> None:
+        """在给定图像列表上绘制矩形框"""
+        x, y, w, h = bounding_rect
+        for img in images:
+            cv2.rectangle(img, (x, y), (x + w, y + h), color, 1)
+
     def _save_results(self, blue_img: np.ndarray, green_img: np.ndarray,
                       red_img: np.ndarray, segmented_mask: np.ndarray,
-                      sub_folder: str, original_name: str):
+                      sub_folder: str, blue_name: str, green_name: str,
+                      red_name: str) -> Tuple[str, str, str, str]:
         """
-        保存结果图像
+        保存结果图像（包含分割掩码）并返回保存路径
 
         Args:
             blue_img: 蓝色图像（增强后带框选）
@@ -389,20 +438,62 @@ class CTCAnalyzer:
             red_img: 红色图像（增强后带框选）
             segmented_mask: 分割掩码
             sub_folder: 子文件夹
-            original_name: 原始文件名
+            blue_name: 蓝色通道文件名
+            green_name: 绿色通道文件名
+            red_name: 红色通道文件名
+
+        Returns:
+            包含蓝色、绿色、红色通道图像及掩码的保存路径
         """
-        save_folder = os.path.join(self.file_save_path, sub_folder)
-        os.makedirs(save_folder, exist_ok=True)
+        save_folder = Path(self.file_save_path) / sub_folder
+        save_folder.mkdir(parents=True, exist_ok=True)
 
-        blue_save_path = os.path.join(save_folder, original_name)
-        green_save_path = os.path.join(save_folder, original_name.replace('b', 'g'))
-        red_save_path = os.path.join(save_folder, original_name.replace('b', 'r'))
-        bb_save_path = os.path.join(save_folder, original_name.replace('b', 'bb'))
+        blue_path = save_folder / blue_name
+        green_path = save_folder / green_name
+        red_path = save_folder / red_name
 
-        cv2.imwrite(blue_save_path, blue_img)
-        cv2.imwrite(green_save_path, green_img)
-        cv2.imwrite(red_save_path, red_img)
-        cv2.imwrite(bb_save_path, segmented_mask)
+        blue_stem = blue_path.stem
+        mask_name = f"{blue_stem}_mask{blue_path.suffix}"
+        mask_path = save_folder / mask_name
+
+        cv2.imwrite(str(blue_path), blue_img)
+        cv2.imwrite(str(green_path), green_img)
+        cv2.imwrite(str(red_path), red_img)
+        cv2.imwrite(str(mask_path), segmented_mask)
+
+        return str(blue_path), str(green_path), str(red_path), str(mask_path)
+
+    def _save_ctc_highlights(self, blue_img: np.ndarray, green_img: np.ndarray,
+                             red_img: np.ndarray, sub_folder: str,
+                             blue_name: str, green_name: str,
+                             red_name: str) -> Tuple[str, str, str]:
+        """
+        保存仅标注CTC的结果图像，并返回保存路径
+
+        Args:
+            blue_img: 蓝色通道图像（仅含CTC标记）
+            green_img: 绿色通道图像（仅含CTC标记）
+            red_img: 红色通道图像（仅含CTC标记）
+            sub_folder: 子文件夹
+            blue_name: 蓝色通道原始文件名
+            green_name: 绿色通道原始文件名
+            red_name: 红色通道原始文件名
+
+        Returns:
+            蓝色、绿色、红色通道CTC高亮图像的保存路径
+        """
+        highlight_folder = Path(self.file_save_path) / sub_folder / "ctc"
+        highlight_folder.mkdir(parents=True, exist_ok=True)
+
+        blue_path = highlight_folder / f"{Path(blue_name).stem}_ctc{Path(blue_name).suffix}"
+        green_path = highlight_folder / f"{Path(green_name).stem}_ctc{Path(green_name).suffix}"
+        red_path = highlight_folder / f"{Path(red_name).stem}_ctc{Path(red_name).suffix}"
+
+        cv2.imwrite(str(blue_path), blue_img)
+        cv2.imwrite(str(green_path), green_img)
+        cv2.imwrite(str(red_path), red_img)
+
+        return str(blue_path), str(green_path), str(red_path)
 
     def process_all_images(self):
         """处理所有图像"""
