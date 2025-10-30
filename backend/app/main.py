@@ -216,26 +216,39 @@ def _populate_table(table, rows: List[List[str]]) -> None:
 def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str], output_path: Path) -> None:
     document = Document()
 
+    logo_path = Path(__file__).resolve().parent / "assets" / "HBI.jpg"
+    if logo_path.exists():
+        logo_paragraph = document.add_paragraph()
+        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        logo_run = logo_paragraph.add_run()
+        logo_run.add_picture(str(logo_path), width=Inches(1.4))
+        logo_paragraph.paragraph_format.space_after = Pt(6)
+
     title_paragraph = document.add_paragraph()
     title_run = title_paragraph.add_run("检测报告")
     _apply_run_style(title_run, 28, bold=True, color=RGBColor(31, 41, 55))
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-    # separator = document.add_paragraph()
-    # separator_run = separator.add_run("-------------- 分割线 --------------")
-    # _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
-    # separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    if metadata:
+        _add_section_heading(document, "基础信息", color=RGBColor(37, 99, 235))
 
-    # info_heading = document.add_paragraph()
-    # info_heading_run = info_heading.add_run("之前填写的信息")
-    # _apply_run_style(info_heading_run, 16, bold=True, color=RGBColor(217, 119, 6))
-    # info_heading.paragraph_format.space_before = Pt(12)
-    # info_heading.paragraph_format.space_after = Pt(6)
+        rows = (len(metadata) + 1) // 2
+        info_table = document.add_table(rows=rows, cols=4)
+        info_table.autofit = True
 
-    for label, value in metadata.items():
-        info_paragraph = document.add_paragraph()
-        info_run = info_paragraph.add_run(f"{label}：{value}")
-        _apply_run_style(info_run, 12, color=RGBColor(31, 41, 55))
+        for index, (label, value) in enumerate(metadata.items()):
+            row = info_table.rows[index // 2]
+            label_cell_index = (index % 2) * 2
+            label_cell = row.cells[label_cell_index]
+            value_cell = row.cells[label_cell_index + 1]
+
+            _set_cell_text(label_cell, label, bold=True, color=RGBColor(37, 99, 235))
+            _set_cell_text(value_cell, value or "", color=RGBColor(31, 41, 55))
+
+        if len(metadata) % 2 == 1:
+            last_row = info_table.rows[-1]
+            _set_cell_text(last_row.cells[2], "", color=RGBColor(31, 41, 55))
+            _set_cell_text(last_row.cells[3], "", color=RGBColor(31, 41, 55))
 
 
     result_heading = document.add_paragraph()
