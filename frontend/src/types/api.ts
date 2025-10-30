@@ -21,3 +21,9 @@ export interface Detection {
 export interface DetectionResponse {
   detections: Detection[]
 }
+
+export interface HeartbeatResponse {
+  status: string
+  timestamp: string
+  uptime: number
+}
