@@ -256,7 +256,7 @@ const sanitizeText = (value: string | null | undefined) => {
     return ''
   }
   const trimmed = value.trim()
-  return trimmed === '未填写' ? '' : trimmed
+  return trimmed === '' ? '' : trimmed
 }
 
 const formMetadataEntries = computed<ReportMetadataItem[]>(() => {

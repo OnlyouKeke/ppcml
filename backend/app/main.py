@@ -138,23 +138,23 @@ def _create_metadata_entries(
     notes: str,
 ) -> OrderedDict:
     entries: OrderedDict[str, str] = OrderedDict()
-    entries["宠物姓名"] = _normalize_field(pet_name)
-    entries["宠主姓名"] = _normalize_field(owner_name)
-    entries["年龄"] = _normalize_field(age)
-    entries["性别"] = _normalize_field(gender)
-    entries["标本类型"] = _normalize_field(sample_type)
+    entries["宠物姓名:"] = _normalize_field(pet_name)
+    entries["宠主姓名:"] = _normalize_field(owner_name)
+    entries["年龄:"] = _normalize_field(age)
+    entries["性别:"] = _normalize_field(gender)
+    entries["标本类型:"] = _normalize_field(sample_type)
 
     intake_value = _normalize_field(medication_intake)
     entries["一周内是否有药物摄入"] = intake_value
 
     if intake_value == "是":
-        entries["药物名称"] = _normalize_field(medication_details)
+        entries["药物名称:"] = _normalize_field(medication_details)
     elif intake_value == "否":
-        entries["药物名称"] = ""
+        entries["药物名称:"] = ""
     else:
-        entries["药物名称"] = _normalize_field(medication_details)
+        entries["药物名称:"] = _normalize_field(medication_details)
 
-    entries["备注"] = _normalize_field(notes)
+    entries["备注:"] = _normalize_field(notes)
     return entries
 
 
