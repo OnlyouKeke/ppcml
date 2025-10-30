@@ -24,7 +24,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt, RGBColor
+from docx.shared import Pt, RGBColor, Inches
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -254,6 +254,39 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     selection_paragraph = document.add_paragraph()
     selection_run = selection_paragraph.add_run("选三张不同荧光同一区域的照片，有方框标出是CTC。")
     _apply_run_style(selection_run, 12, color=RGBColor(55, 65, 81))
+
+    ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
+    if ctc_image_sets:
+        image_set = ctc_image_sets[0]
+        labels_and_paths = [
+            ("蓝色通道", image_set["blue_path"]),
+            ("绿色通道", image_set["green_path"]),
+            ("红色通道", image_set["red_path"]),
+        ]
+
+        image_table = document.add_table(rows=2, cols=3)
+        image_table.autofit = True
+
+        first_row = image_table.rows[0]
+        second_row = image_table.rows[1]
+
+        for idx, (label, path) in enumerate(labels_and_paths):
+            if not path or not os.path.exists(path):
+                continue
+
+            cell = first_row.cells[idx]
+            paragraph = cell.paragraphs[0]
+            run = paragraph.add_run()
+            run.add_picture(path, width=Inches(2.0))
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            label_cell = second_row.cells[idx]
+            _set_cell_text(label_cell, label, bold=True, color=RGBColor(31, 41, 55))
+            label_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    else:
+        no_image_paragraph = document.add_paragraph()
+        no_image_run = no_image_paragraph.add_run("当前未检测到可用于展示的CTC图像。")
+        _apply_run_style(no_image_run, 12, color=RGBColor(107, 114, 128))
 
     result_text = (
         f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
