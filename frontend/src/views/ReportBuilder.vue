@@ -13,25 +13,57 @@
           <template #header>
             <div class="card-title">基础信息填写</div>
           </template>
-          <el-form :model="form" label-width="92px" label-position="left" class="info-form">
-            <el-form-item label="宠物姓名">
-              <el-input v-model="form.petName" placeholder="请输入宠物姓名" clearable />
-            </el-form-item>
-            <el-form-item label="性别">
-              <el-select v-model="form.gender" placeholder="请选择性别" clearable>
-                <el-option label="公" value="公" />
-                <el-option label="母" value="母" />
-                <el-option label="未知" value="未知" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="年龄">
-              <el-input v-model="form.age" placeholder="例如：2岁3个月" clearable />
-            </el-form-item>
-            <el-form-item label="品种">
-              <el-input v-model="form.species" placeholder="请输入宠物品种" clearable />
-            </el-form-item>
-            <el-form-item label="主人姓名">
-              <el-input v-model="form.ownerName" placeholder="请输入主人姓名" clearable />
+          <el-form :model="form" label-width="120px" label-position="left" class="info-form">
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="宠物姓名">
+                  <el-input v-model="form.petName" placeholder="请输入宠物姓名" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="宠主姓名">
+                  <el-input v-model="form.ownerName" placeholder="请输入宠主姓名" clearable />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="性别">
+                  <el-select v-model="form.gender" placeholder="请选择性别" clearable>
+                    <el-option label="公" value="公" />
+                    <el-option label="母" value="母" />
+                    <el-option label="未知" value="未知" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="年龄">
+                  <el-input v-model="form.age" placeholder="例如：2岁3个月" clearable />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="标本类型">
+                  <el-input v-model="form.sampleType" placeholder="请输入标本类型" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="一周内是否有药物摄入">
+                  <el-radio-group v-model="form.medicationIntake">
+                    <el-radio label="是">是</el-radio>
+                    <el-radio label="否">否</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="如有，哪些？">
+              <el-input
+                v-model="form.medicationDetails"
+                placeholder="请输入药物名称，如有多种请用顿号分隔"
+                :disabled="form.medicationIntake !== '是'"
+                clearable
+              />
             </el-form-item>
             <el-form-item label="备注信息">
               <el-input
@@ -184,7 +216,7 @@
 <script lang="ts" setup>
 import { ElMessage } from 'element-plus'
 import { isAxiosError } from 'axios'
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { getHeartbeat, postGenerateCtcReport } from '../api/api'
 import type { CtcReportResponse, ReportImageItem } from '../types/api'
 
@@ -192,21 +224,34 @@ type FileWithRelativePath = File & { webkitRelativePath?: string }
 
 interface FormState {
   petName: string
+  ownerName: string
   gender: string
   age: string
-  species: string
-  ownerName: string
+  sampleType: string
+  medicationIntake: '是' | '否' | ''
+  medicationDetails: string
   notes: string
 }
 
 const form = reactive<FormState>({
   petName: '',
+  ownerName: '',
   gender: '',
   age: '',
-  species: '',
-  ownerName: '',
+  sampleType: '',
+  medicationIntake: '',
+  medicationDetails: '',
   notes: ''
 })
+
+watch(
+  () => form.medicationIntake,
+  value => {
+    if (value !== '是') {
+      form.medicationDetails = ''
+    }
+  }
+)
 
 const selectedFiles = ref<FileWithRelativePath[]>([])
 const selectedFolderName = ref('')
@@ -379,10 +424,10 @@ const runDetection = async () => {
         ownerName: form.ownerName,
         age: form.age,
         gender: form.gender,
-        species: form.species,
-        notes: form.notes,
-        sampleType: '',
-        massLocation: ''
+        sampleType: form.sampleType,
+        medicationIntake: form.medicationIntake,
+        medicationDetails: form.medicationDetails,
+        notes: form.notes
       },
       roundnessThreshold: roundnessThreshold.value
     })
@@ -441,10 +486,12 @@ const downloadDocx = () => {
 
 const resetAll = () => {
   form.petName = ''
+  form.ownerName = ''
   form.gender = ''
   form.age = ''
-  form.species = ''
-  form.ownerName = ''
+  form.sampleType = ''
+  form.medicationIntake = ''
+  form.medicationDetails = ''
   form.notes = ''
   resetSelectedFolder()
   if (fileInputRef.value) {
@@ -556,6 +603,14 @@ onBeforeUnmount(() => {
 
 .info-form {
   padding-right: 8px;
+}
+
+.form-row {
+  margin-bottom: 4px;
+}
+
+.form-row:last-of-type {
+  margin-bottom: 0;
 }
 
 .upload-area {

@@ -128,19 +128,23 @@ def _create_metadata_entries(
     owner_name: str,
     age: str,
     gender: str,
-    species: str,
     sample_type: str,
-    mass_location: str,
+    medication_intake: str,
+    medication_details: str,
     notes: str,
 ) -> OrderedDict:
     entries: OrderedDict[str, str] = OrderedDict()
     entries["宠物姓名"] = pet_name or "未填写"
-    entries["主人姓名"] = owner_name or "未填写"
+    entries["宠主姓名"] = owner_name or "未填写"
     entries["年龄"] = age or "未填写"
     entries["性别"] = gender or "未填写"
-    entries["品种"] = species or "未填写"
-    entries["样本类型"] = sample_type or "未填写"
-    entries["同侧是否有肿块及部位"] = mass_location or "未填写"
+    entries["标本类型"] = sample_type or "未填写"
+    intake_value = medication_intake or "未填写"
+    entries["一周内是否有药物摄入"] = intake_value
+    if intake_value == "是":
+        entries["药物名称"] = medication_details or "未填写"
+    else:
+        entries["药物名称"] = "无"
     entries["备注"] = notes or "无"
     return entries
 
@@ -412,9 +416,9 @@ async def generate_ctc_report(
     owner_name: str = Form("", alias="ownerName"),
     age: str = Form("", alias="age"),
     gender: str = Form("", alias="gender"),
-    species: str = Form("", alias="species"),
     sample_type: str = Form("", alias="sampleType"),
-    mass_location: str = Form("", alias="massLocation"),
+    medication_intake: str = Form("", alias="medicationIntake"),
+    medication_details: str = Form("", alias="medicationDetails"),
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
 ) -> FileResponse:
@@ -459,9 +463,9 @@ async def generate_ctc_report(
             owner_name,
             age,
             gender,
-            species,
             sample_type,
-            mass_location,
+            medication_intake,
+            medication_details,
             notes,
         )
         logger.info(
