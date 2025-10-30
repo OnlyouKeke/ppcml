@@ -21,8 +21,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
-from .ctc import CTCAnalyzer
-
+try:
+    from .ctc import CTCAnalyzer
+except ImportError:
+    # 当直接运行脚本时使用绝对导入
+    from ctc import CTCAnalyzer
 
 logging.basicConfig(
     level=logging.INFO,
