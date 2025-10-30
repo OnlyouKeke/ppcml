@@ -134,14 +134,14 @@ def _create_metadata_entries(
     notes: str,
 ) -> OrderedDict:
     entries: OrderedDict[str, str] = OrderedDict()
-    entries["宠物姓名"] = pet_name or "未填写"
-    entries["主人姓名"] = owner_name or "未填写"
-    entries["年龄"] = age or "未填写"
-    entries["性别"] = gender or "未填写"
-    entries["品种"] = species or "未填写"
-    entries["样本类型"] = sample_type or "未填写"
-    entries["同侧是否有肿块及部位"] = mass_location or "未填写"
-    entries["备注"] = notes or "无"
+    entries["宠物姓名"] = pet_name or ""
+    entries["主人姓名"] = owner_name or ""
+    entries["年龄"] = age or ""
+    entries["性别"] = gender or ""
+    entries["品种"] = species or ""
+    entries["样本类型"] = sample_type or ""
+    entries["同侧是否有肿块及部位"] = mass_location or ""
+    entries["备注"] = notes or ""
     return entries
 
 
@@ -233,11 +233,6 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
         info_run = info_paragraph.add_run(f"{label}：{value}")
         _apply_run_style(info_run, 12, color=RGBColor(31, 41, 55))
 
-    separator = document.add_paragraph()
-    separator_run = separator.add_run("-------------------------------")
-    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
-    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
 
     result_heading = document.add_paragraph()
     result_heading_run = result_heading.add_run("检测结果")
@@ -303,6 +298,12 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     remark_paragraph = document.add_paragraph()
     remark_run = remark_paragraph.add_run(f"备注：生物标记物染色选用{biomarker_text}。")
     _apply_run_style(remark_run, 12, color=RGBColor(30, 64, 45))
+    
+    separator = document.add_paragraph()
+    separator_run = separator.add_run("-------------------------------")
+    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
+    separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
 
     footer = document.add_paragraph()
     footer_run = footer.add_run("检测人：______________    审核人：______________    报告日期：______________")
