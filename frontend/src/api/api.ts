@@ -127,10 +127,10 @@ interface CtcReportPayload {
     ownerName: string
     age: string
     gender: string
-    species: string
     notes: string
     sampleType?: string
-    massLocation?: string
+    medicationIntake?: string
+    medicationDetails?: string
   }
   roundnessThreshold?: number
 }
@@ -158,10 +158,10 @@ export const postGenerateCtcReport = async ({
   formData.append('ownerName', form.ownerName || '')
   formData.append('age', form.age || '')
   formData.append('gender', form.gender || '')
-  formData.append('species', form.species || '')
   formData.append('notes', form.notes || '')
   formData.append('sampleType', form.sampleType || '')
-  formData.append('massLocation', form.massLocation || '')
+  formData.append('medicationIntake', form.medicationIntake || '')
+  formData.append('medicationDetails', form.medicationDetails || '')
   formData.append('roundnessThreshold', String(roundnessThreshold))
 
   try {
