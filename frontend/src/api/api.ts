@@ -22,7 +22,7 @@ console.info('[API] Backend URL resolved to:', isElectron ? backendUrl ?? defaul
 const api = axios.create({
   // 在Electron环境中直接使用FastAPI的URL，否则使用代理
   baseURL: isElectron ? backendUrl ?? defaultBackendUrl : '/api',
-  timeout: 900000,
+  timeout: 9000000,
   maxBodyLength: Infinity,
   maxContentLength: Infinity,
   headers: {
@@ -171,7 +171,7 @@ export const postGenerateCtcReport = async ({
       headers: {
         'Content-Type': 'multipart/form-data'
       },
-      timeout: 900000
+      timeout: 9000000
     })) as unknown as CtcReportResponse
 
     console.debug('[API] Received CTC report response', {
