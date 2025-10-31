@@ -323,7 +323,20 @@ def _set_table_transparent(table) -> None:
                 border.set(qn("w:val"), "nil")
 
 
-def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str], output_path: Path) -> None:
+def _format_channel_summary_texts(analyzer: CTCAnalyzer) -> list[str]:
+    channel_summary_pairs = (
+        ("green_single_channel", analyzer.results.get("green_single_channel", [])),
+        ("white_single_channel", analyzer.results.get("white_single_channel", [])),
+    )
+    return [f"{label} {values}" for label, values in channel_summary_pairs]
+
+
+def _build_report_document(
+    analyzer: CTCAnalyzer,
+    metadata: OrderedDict[str, str],
+    output_path: Path,
+    channel_summary_texts: list[str] | None = None,
+) -> None:
     document = Document()
     logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
     if logo_path.exists():
@@ -383,6 +396,15 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
     if ctc_image_sets:
         image_set = ctc_image_sets[0]
+
+        for summary_text in channel_summary_texts or []:
+            if not summary_text:
+                continue
+            summary_paragraph = document.add_paragraph()
+            summary_paragraph.paragraph_format.space_after = Pt(2)
+            summary_run = summary_paragraph.add_run(summary_text)
+            _apply_run_style(summary_run, 10, color=RGBColor(55, 65, 81))
+
         def _resolve_preview_path(primary_key: str, *fallback_keys: str) -> str | None:
             keys = (primary_key,) + fallback_keys
             for key in keys:
@@ -600,7 +622,13 @@ async def generate_ctc_report(
         )
 
         report_path = output_dir / "ctc_report.docx"
-        _build_report_document(analyzer, metadata, report_path)
+        channel_summary_texts = _format_channel_summary_texts(analyzer)
+        _build_report_document(
+            analyzer,
+            metadata,
+            report_path,
+            channel_summary_texts=channel_summary_texts,
+        )
         logger.info("报告已生成：%s", report_path)
 
         report_bytes = report_path.read_bytes()
@@ -688,6 +716,7 @@ async def generate_ctc_report(
             "selectionText": selection_text,
             "hasCtcImages": bool(image_set_payload),
             "imageSet": image_set_payload,
+            "channelSummaryTexts": channel_summary_texts,
             "warnings": [],
         }
 

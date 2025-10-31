@@ -139,6 +139,15 @@
               </section>
               <section v-if="channelPreviewItems.length" class="preview-section">
                 <h4 class="section-title">通道图像</h4>
+                <div v-if="channelSummaryTexts.length" class="channel-summary-texts">
+                  <p
+                    v-for="(text, index) in channelSummaryTexts"
+                    :key="`summary-${index}`"
+                    class="channel-summary-text"
+                  >
+                    {{ text }}
+                  </p>
+                </div>
                 <div class="channel-preview-grid">
                   <div
                     v-for="item in channelPreviewItems"
@@ -354,6 +363,13 @@ const metadataRows = computed(() => {
     rows.push([null, null])
   }
   return rows
+})
+
+const channelSummaryTexts = computed(() => {
+  const texts = reportData.value?.channelSummaryTexts ?? []
+  return texts
+    .map(text => sanitizeText(text))
+    .filter((text): text is string => Boolean(text))
 })
 
 const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
@@ -832,6 +848,20 @@ onBeforeUnmount(() => {
 .metadata-table tbody tr:last-child .metadata-heading,
 .metadata-table tbody tr:last-child .metadata-data {
   border-bottom: none;
+}
+
+.channel-summary-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.channel-summary-text {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+  text-align: left;
 }
 
 .channel-preview-grid {
