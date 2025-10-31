@@ -224,14 +224,17 @@ def _populate_table(table, rows: List[List[str]]) -> None:
 
 def _set_table_transparent(table) -> None:
     tbl = table._tbl
-    tbl_pr = tbl.tblPr
-    if tbl_pr is None:
-        tbl_pr = OxmlElement("w:tblPr")
-        tbl.insert(0, tbl_pr)
-    borders = tbl_pr.find(qn("w:tblBorders"))
+    # 使用xpath获取tblPr，如果不存在则创建
+    tblPr_elements = tbl.xpath('w:tblPr')
+    if tblPr_elements:
+        tblPr = tblPr_elements[0]
+    else:
+        tblPr = OxmlElement('w:tblPr')
+        tbl.insert(0, tblPr)
+    borders = tblPr.find(qn("w:tblBorders"))
     if borders is None:
         borders = OxmlElement("w:tblBorders")
-        tbl_pr.append(borders)
+        tblPr.append(borders)
 
     for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
         border = borders.find(qn(f"w:{border_name}"))
@@ -263,7 +266,7 @@ def _set_table_transparent(table) -> None:
 
 def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str], output_path: Path) -> None:
     document = Document()
-    logo_path = Path(__file__).resolve().parent / "assets" / "HBI.jpg"
+    logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
     if logo_path.exists():
         logo_paragraph = document.add_paragraph()
         logo_run = logo_paragraph.add_run()
