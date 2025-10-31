@@ -53,11 +53,16 @@ for _stream_name in ("stdout", "stderr"):
         if buffer is not None:
             setattr(sys, _stream_name, io.TextIOWrapper(buffer, encoding="utf-8", errors="replace"))
 
+LOG_DIR = Path(__file__).resolve().parent.parent / "log"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "app.log"
+
+_file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+_stream_handler = logging.StreamHandler(sys.stdout)
 logging.basicConfig(
     level=logging.INFO,
     format="[%(asctime)s] %(levelname)s %(name)s - %(message)s",
-    stream=sys.stdout,
-    encoding='utf-8'
+    handlers=[_file_handler, _stream_handler],
 )
 
 
