@@ -29,7 +29,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 
 try:
     from .ctc import CTCAnalyzer
@@ -459,16 +459,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.get("/")
-async def root() -> dict[str, str]:
-    return {"message": "Hello World"}
-
-
-@app.get("/hello/{name}")
-async def say_hello(name: str) -> dict[str, str]:
-    return {"message": f"Hello {name}"}
 
 
 @app.get("/healthz")
