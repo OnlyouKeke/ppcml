@@ -29,7 +29,7 @@ from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse,JSONResponse
 
 try:
     from .ctc import CTCAnalyzer
