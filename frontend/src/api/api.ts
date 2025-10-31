@@ -92,7 +92,7 @@ api.interceptors.response.use(
 // API函数
 
 export const getHeartbeat = async (): Promise<HeartbeatResponse> => {
-  return await api.get('/healthz', { timeout: 5000 })
+  return await api.get('/healthz', { timeout: 50000 })
 }
 
 interface CtcReportPayload {
