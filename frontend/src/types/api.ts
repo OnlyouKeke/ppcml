@@ -40,5 +40,6 @@ export interface CtcReportResponse {
   selectionText: string
   hasCtcImages: boolean
   imageSet?: ReportImageSet | null
+  channelSummaryTexts?: string[]
   warnings?: string[]
 }
