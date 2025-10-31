@@ -1,6 +1,7 @@
 import hashlib
 import logging
 import os
+import re
 import sys
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
@@ -27,6 +28,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches
+import cv2
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse,JSONResponse
@@ -61,6 +63,8 @@ logging.basicConfig(
 
 
 logger = logging.getLogger("ctc_app")
+
+INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
 
 
 def verify_startup_token() -> None:
@@ -148,14 +152,60 @@ def _create_metadata_entries(
     entries["一周内是否有药物摄入"] = intake_value
 
     if intake_value == "是":
-        entries["药物名称:"] = _normalize_field(medication_details)
+        entries["药物名称:"] = _format_medication_schedule(medication_details)
     elif intake_value == "否":
-        entries["药物名称:"] = ""
+        entries["药物名称:"] = "无（近期未使用药物）"
     else:
-        entries["药物名称:"] = _normalize_field(medication_details)
+        formatted_details = _format_medication_schedule(medication_details)
+        entries["药物名称:"] = formatted_details or _normalize_field(medication_details)
 
     entries["备注:"] = _normalize_field(notes)
     return entries
+
+
+def _format_medication_schedule(medication_details: str) -> str:
+    """将药物明细格式化为更易读的排班列表"""
+    normalized = _normalize_field(medication_details)
+    if not normalized:
+        return ""
+
+    parts = [part.strip() for part in re.split(r"[、,，;；\n\r]+", normalized) if part.strip()]
+    if not parts:
+        return normalized
+
+    if len(parts) == 1:
+        return parts[0]
+
+    formatted_lines = [f"{index + 1}. {item}" for index, item in enumerate(parts)]
+    return "\n".join(formatted_lines)
+
+
+def _encode_preview_image(image_path: Path) -> tuple[str, str] | None:
+    """读取图像并转换为可预览的Base64格式"""
+    try:
+        mime_type, _ = mimetypes.guess_type(str(image_path))
+        if mime_type in INLINE_SUPPORTED_MIME_TYPES:
+            image_bytes = image_path.read_bytes()
+            return mime_type, base64.b64encode(image_bytes).decode("ascii")
+
+        image = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+        if image is None:
+            image_bytes = image_path.read_bytes()
+            return (mime_type or "image/png", base64.b64encode(image_bytes).decode("ascii"))
+
+        success, buffer = cv2.imencode(".png", image)
+        if not success:
+            logger.warning("图像编码为PNG失败：%s", image_path)
+            image_bytes = image_path.read_bytes()
+            return (mime_type or "image/png", base64.b64encode(image_bytes).decode("ascii"))
+
+        return "image/png", base64.b64encode(buffer.tobytes()).decode("ascii")
+    except OSError:
+        logger.warning("无法读取预览图像：%s", image_path)
+        return None
+    except Exception:
+        logger.exception("处理预览图像时出现错误：%s", image_path)
+        return None
 
 
 def _apply_run_style(run, size: int, bold: bool = False, color: RGBColor | None = None) -> None:
@@ -190,8 +240,12 @@ def _set_cell_text(
 ) -> None:
     cell.text = ""
     paragraph = cell.paragraphs[0]
-    run = paragraph.add_run(text)
-    _apply_run_style(run, 12, bold=bold, color=color)
+    lines = text.splitlines() or [""]
+    for index, line in enumerate(lines):
+        run = paragraph.add_run(line)
+        _apply_run_style(run, 12, bold=bold, color=color)
+        if index < len(lines) - 1:
+            run.add_break()
     paragraph.paragraph_format.space_after = Pt(0)
 
     if fill is not None:
@@ -589,17 +643,15 @@ async def generate_ctc_report(
                 image_path = _resolve_image(*keys)
                 if not image_path:
                     continue
-                mime_type, _ = mimetypes.guess_type(str(image_path))
-                try:
-                    image_bytes = image_path.read_bytes()
-                except OSError:
-                    logger.warning("无法读取预览图像：%s", image_path)
+                encoded_preview = _encode_preview_image(image_path)
+                if not encoded_preview:
                     continue
+                mime_type, encoded_data = encoded_preview
                 images_payload.append(
                     {
                         "label": label,
                         "mimeType": mime_type or "image/png",
-                        "data": base64.b64encode(image_bytes).decode("ascii"),
+                        "data": encoded_data,
                     }
                 )
 
