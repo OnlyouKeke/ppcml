@@ -259,14 +259,52 @@ const sanitizeText = (value: string | null | undefined) => {
   return trimmed === '' ? '' : trimmed
 }
 
+const splitMedicationDetails = (value: string) =>
+  value
+    .split(/[、,，;；\n\r]+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+
+const buildMedicationSchedule = (details: string) => {
+  if (!details) {
+    return ''
+  }
+  const parts = splitMedicationDetails(details)
+  if (!parts.length) {
+    return details
+  }
+  if (parts.length === 1) {
+    return parts[0]
+  }
+  return parts.map((item, index) => `${index + 1}. ${item}`).join('\n')
+}
+
+const resolveMedicationValue = (intake: string, details: string) => {
+  const normalizedIntake = sanitizeText(intake)
+  const normalizedDetails = sanitizeText(details)
+
+  if (!normalizedIntake) {
+    return buildMedicationSchedule(normalizedDetails)
+  }
+
+  if (normalizedIntake === '否') {
+    return '无（近期未使用药物）'
+  }
+
+  if (normalizedIntake === '是') {
+    if (!normalizedDetails) {
+      return '已服用药物（具体名称未填写）'
+    }
+    return buildMedicationSchedule(normalizedDetails)
+  }
+
+  const schedule = buildMedicationSchedule(normalizedDetails)
+  return schedule || normalizedDetails
+}
+
 const formMetadataEntries = computed<ReportMetadataItem[]>(() => {
   const intakeValue = sanitizeText(form.medicationIntake)
-  const medicationValue =
-    intakeValue === '是'
-      ? sanitizeText(form.medicationDetails)
-      : intakeValue === '否'
-        ? ''
-        : sanitizeText(form.medicationDetails)
+  const medicationValue = resolveMedicationValue(form.medicationIntake, form.medicationDetails)
 
   return [
     { label: '宠物姓名', value: sanitizeText(form.petName) },
@@ -788,6 +826,7 @@ onBeforeUnmount(() => {
   color: #0f172a;
   word-break: break-word;
   background-color: transparent;
+  white-space: pre-line;
 }
 
 .metadata-table tbody tr:last-child .metadata-heading,
