@@ -1,6 +1,6 @@
 {
   "appId": "com.example.electron-fastapi-vue",
-  "productName": "Electron FastAPI Vue App",
+  "productName": "宠物样本检测",
   "directories": {
     "output": "release_new"
   },

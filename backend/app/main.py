@@ -435,7 +435,7 @@ def _build_report_document(analyzer: CTCAnalyzer, metadata: OrderedDict[str, str
     
     separator = document.add_paragraph()
     separator_run = separator.add_run("--------------------------------------------------------------------")
-    _apply_run_style(separator_run, 12, color=RGBColor(239, 68, 68))
+    _apply_run_style(separator_run, 12, color=RGBColor(75, 85, 99))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
 
