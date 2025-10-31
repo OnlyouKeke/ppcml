@@ -53,6 +53,15 @@
     ],
     "extraMetadata": {
       "main": "dist/electron/main.js"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

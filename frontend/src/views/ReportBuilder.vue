@@ -17,12 +17,12 @@
             <el-row :gutter="16" class="form-row">
               <el-col :xs="24" :sm="12">
                 <el-form-item label="宠物姓名">
-                  <el-input v-model="form.petName" placeholder="请输入宠物姓名" clearable />
+                  <el-input v-model="form.petName" placeholder="宠物姓名" clearable />
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12">
                 <el-form-item label="宠主姓名">
-                  <el-input v-model="form.ownerName" placeholder="请输入宠主姓名" clearable />
+                  <el-input v-model="form.ownerName" placeholder="宠主姓名" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -38,7 +38,7 @@
               </el-col>
               <el-col :xs="24" :sm="12">
                 <el-form-item label="年龄">
-                  <el-input v-model="form.age" placeholder="例如：2岁3个月" clearable />
+                  <el-input v-model="form.age" placeholder="2岁3个月" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -49,7 +49,7 @@
                 </el-form-item>
               </el-col>
               <el-col :xs="24" :sm="12">
-                <el-form-item label="一周内是否有药物摄入">
+                <el-form-item label="一周内药物摄入">
                   <el-radio-group v-model="form.medicationIntake">
                     <el-radio label="是">是</el-radio>
                     <el-radio label="否">否</el-radio>
@@ -60,7 +60,7 @@
             <el-form-item label="如有，哪些？">
               <el-input
                 v-model="form.medicationDetails"
-                placeholder="请输入药物名称，如有多种请用顿号分隔"
+                placeholder="请输入药物名称"
                 :disabled="form.medicationIntake !== '是'"
                 clearable
               />
@@ -70,7 +70,7 @@
                 v-model="form.notes"
                 type="textarea"
                 :rows="3"
-                placeholder="记录额外说明，例如既往病史、当前症状等"
+                placeholder="既往病史、当前症状等"
                 resize="none"
               />
             </el-form-item>
