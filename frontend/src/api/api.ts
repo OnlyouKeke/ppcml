@@ -1,10 +1,5 @@
 import axios, { isAxiosError } from 'axios'
-import type {
-  ApiResponse,
-  CtcReportResponse,
-  DetectionResponse,
-  HeartbeatResponse
-} from '../types/api'
+import type { CtcReportResponse, HeartbeatResponse } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -96,30 +91,8 @@ api.interceptors.response.use(
 
 // API函数
 
-// 获取根路径数据
-export const getRoot = async (): Promise<ApiResponse> => {
-  return await api.get('/')
-}
-
-// 获取问候数据
-export const getHello = async (name: string): Promise<ApiResponse> => {
-  return await api.get(`/hello/${name}`)
-}
-
 export const getHeartbeat = async (): Promise<HeartbeatResponse> => {
   return await api.get('/healthz', { timeout: 5000 })
-}
-
-// 上传图片并进行目标检测
-export const postDetect = async (file: File): Promise<DetectionResponse> => {
-  const formData = new FormData()
-  formData.append('file', file)
-
-  return await api.post('/detect', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
-  })
 }
 
 interface CtcReportPayload {
