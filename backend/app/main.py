@@ -53,8 +53,30 @@ for _stream_name in ("stdout", "stderr"):
         if buffer is not None:
             setattr(sys, _stream_name, io.TextIOWrapper(buffer, encoding="utf-8", errors="replace"))
 
-LOG_DIR = Path(__file__).resolve().parent.parent / "log"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+def _determine_log_dir() -> Path:
+    """Return the directory where runtime logs should be stored."""
+
+    env_dir = os.environ.get("FASTAPI_LOG_DIR")
+    if env_dir:
+        candidate = Path(env_dir).expanduser()
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            return candidate
+        except OSError:
+            # 如果指定目录无法创建，则继续使用默认目录
+            pass
+
+    if getattr(sys, "frozen", False):
+        base_dir = Path(sys.executable).resolve().parent
+    else:
+        base_dir = Path(__file__).resolve().parent.parent
+
+    default_dir = base_dir / "log"
+    default_dir.mkdir(parents=True, exist_ok=True)
+    return default_dir
+
+
+LOG_DIR = _determine_log_dir()
 LOG_FILE = LOG_DIR / "app.log"
 
 _file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
@@ -64,6 +86,7 @@ logging.basicConfig(
     format="[%(asctime)s] %(levelname)s %(name)s - %(message)s",
     handlers=[_file_handler, _stream_handler],
 )
+logging.getLogger(__name__).info("日志输出目录: %s", LOG_DIR)
 
 
 
