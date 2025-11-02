@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { existsSync, mkdirSync } from 'fs'
 import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { platform } from 'os'
 import { createHash } from 'crypto'
@@ -15,6 +16,13 @@ let mainWindow: BrowserWindow | null = null
 
 // 后端端口
 const backendPort = isDev ? 8001 : 8000
+const backendLogDir = isDev
+  ? join(__dirname, '..', '..', '..', 'backend', 'log')
+  : join(process.resourcesPath, 'log')
+
+if (!existsSync(backendLogDir)) {
+  mkdirSync(backendLogDir, { recursive: true })
+}
 
 // 将后端端口暴露到渲染进程可读取的环境变量中
 process.env.FASTAPI_PORT = backendPort.toString()
@@ -101,7 +109,8 @@ function startFastApi() {
   const env = {
     ...process.env,
     FASTAPI_STARTUP_TOKEN: startupToken,
-    FASTAPI_PORT: backendPort.toString()
+    FASTAPI_PORT: backendPort.toString(),
+    FASTAPI_LOG_DIR: backendLogDir
   }
   
   if (isDev) {
@@ -138,7 +147,8 @@ function startFastApi() {
     try {
       fastApiProcess = spawn(backendExecutable, [], {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: env
+        env: env,
+        cwd: process.resourcesPath
       })
     } catch (error) {
       console.error('Failed to start FastAPI in production mode:', error)
