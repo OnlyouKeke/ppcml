@@ -58,13 +58,18 @@ def _determine_log_dir() -> Path:
 
     env_dir = os.environ.get("FASTAPI_LOG_DIR")
     if env_dir:
-        candidate = Path(env_dir).expanduser()
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            return candidate
-        except OSError:
-            # 如果指定目录无法创建，则继续使用默认目录
-            pass
+        expanded_dir = os.path.expandvars(env_dir.strip())
+        if expanded_dir and expanded_dir[0] == expanded_dir[-1] and expanded_dir[0] in {'"', "'"}:
+            expanded_dir = expanded_dir[1:-1]
+
+        if expanded_dir:
+            candidate = Path(expanded_dir).expanduser()
+            try:
+                candidate.mkdir(parents=True, exist_ok=True)
+                return candidate
+            except OSError:
+                # 如果指定目录无法创建，则继续使用默认目录
+                pass
 
     if getattr(sys, "frozen", False):
         base_dir = Path(sys.executable).resolve().parent
