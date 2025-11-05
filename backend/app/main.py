@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import sys
+# 设置环境变量确保UTF-8编码
 os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 # 确保标准输出流使用 UTF-8 编码
@@ -10,7 +11,24 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 if hasattr(sys.stderr, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8')
-    
+
+# 设置默认编码为UTF-8
+if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
+    # 对于Python 3.7及以上版本
+    import io
+    sys.stdout = io.TextIOWrapper(
+        sys.stdout.buffer,
+        encoding='utf-8',
+        errors='replace',
+        line_buffering=True
+    )
+    sys.stderr = io.TextIOWrapper(
+        sys.stderr.buffer,
+        encoding='utf-8',
+        errors='replace',
+        line_buffering=True
+    )
+
 import base64
 import shutil
 import io
