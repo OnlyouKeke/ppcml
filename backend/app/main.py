@@ -492,7 +492,7 @@ def _build_report_document(
     document.save(output_path)
 
 
-def _prepare_workdir(contents: bytes) -> tuple[Path, Path, Path]:
+def _prepare_workdir(contents: bytes) -> tuple[Path, Path]:
     work_dir = Path(tempfile.mkdtemp(prefix="ctc-analysis-"))
     try:
         archive_path = work_dir / "upload.zip"
@@ -503,16 +503,14 @@ def _prepare_workdir(contents: bytes) -> tuple[Path, Path, Path]:
             _safe_extract(archive, extracted_dir)
 
         dataset_root = _find_dataset_root(work_dir / "extracted")
-        output_dir = work_dir / "results"
-        output_dir.mkdir(parents=True, exist_ok=True)
     except Exception:
         shutil.rmtree(work_dir, ignore_errors=True)
         raise
 
-    return work_dir, dataset_root, output_dir
+    return work_dir, dataset_root
 
 
-async def _prepare_workdir_from_files(files: List[UploadFile]) -> tuple[Path, Path, Path]:
+async def _prepare_workdir_from_files(files: List[UploadFile]) -> tuple[Path, Path]:
     work_dir = Path(tempfile.mkdtemp(prefix="ctc-analysis-"))
     dataset_root = work_dir / "uploaded"
 
@@ -539,18 +537,48 @@ async def _prepare_workdir_from_files(files: List[UploadFile]) -> tuple[Path, Pa
             target_path.write_bytes(content)
 
         dataset_dir = _find_dataset_root(dataset_root)
-        output_dir = work_dir / "results"
-        output_dir.mkdir(parents=True, exist_ok=True)
     except Exception:
         shutil.rmtree(work_dir, ignore_errors=True)
         raise
 
-    return work_dir, dataset_dir, output_dir
+    return work_dir, dataset_dir
+
+
+def _sanitize_pet_name(pet_name: str) -> str:
+    """Sanitize the pet name for safe filesystem usage."""
+
+    stripped = pet_name.strip()
+    if not stripped:
+        return ""
+
+    sanitized = re.sub(r"[^\w\-\u4e00-\u9fff]+", "_", stripped)
+    return sanitized.strip("_")
+
+
+def _prepare_output_directory(pet_name: str) -> Path:
+    """Create the persistent output directory for generated artifacts."""
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_pet_name = _sanitize_pet_name(pet_name)
+    folder_name = f"{timestamp}_{safe_pet_name}" if safe_pet_name else timestamp
+
+    OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+
+    target_dir = OUTPUT_ROOT / folder_name
+    suffix = 1
+    while target_dir.exists():
+        target_dir = OUTPUT_ROOT / f"{folder_name}_{suffix}"
+        suffix += 1
+
+    target_dir.mkdir(parents=True, exist_ok=False)
+    return target_dir
 
 
 verify_startup_token()
 
 APP_START_TIME = time.time()
+
+OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "var"
 
 app = FastAPI()
 
@@ -611,13 +639,16 @@ async def generate_ctc_report(
             if not contents:
                 raise HTTPException(status_code=400, detail="上传文件内容为空")
 
-            work_dir, dataset_root, output_dir = _prepare_workdir(contents)
+            work_dir, dataset_root = _prepare_workdir(contents)
             logger.info("已从ZIP文件提取数据，工作目录：%s", work_dir)
         elif files:
-            work_dir, dataset_root, output_dir = await _prepare_workdir_from_files(files)
+            work_dir, dataset_root = await _prepare_workdir_from_files(files)
             logger.info("已接收多文件上传，工作目录：%s", work_dir)
         else:
             raise HTTPException(status_code=400, detail="未提供有效的影像数据")
+
+        output_dir = _prepare_output_directory(pet_name)
+        logger.info("报告输出目录：%s", output_dir)
 
         analyzer = CTCAnalyzer(str(dataset_root), str(output_dir), roundness_threshold=roundness_threshold)
         logger.info("开始处理影像数据，数据根目录：%s", dataset_root)
@@ -743,15 +774,21 @@ async def generate_ctc_report(
     except zipfile.BadZipFile as exc:
         if work_dir is not None:
             shutil.rmtree(work_dir, ignore_errors=True)
+        if output_dir is not None and output_dir.exists() and not any(output_dir.iterdir()):
+            output_dir.rmdir()
         raise HTTPException(status_code=400, detail="压缩包文件损坏或格式错误") from exc
     except HTTPException:
         if work_dir is not None:
             shutil.rmtree(work_dir, ignore_errors=True)
+        if output_dir is not None and output_dir.exists() and not any(output_dir.iterdir()):
+            output_dir.rmdir()
         raise
     except Exception as exc:
         logger.exception("生成CTC报告时出现未预期错误")
         if work_dir is not None:
             shutil.rmtree(work_dir, ignore_errors=True)
+        if output_dir is not None and output_dir.exists() and not any(output_dir.iterdir()):
+            output_dir.rmdir()
         raise HTTPException(status_code=500, detail="生成报告时发生未知错误") from exc
     finally:
         if file is not None:
