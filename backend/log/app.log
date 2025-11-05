@@ -98,3 +98,100 @@
 [2025-11-05 20:35:17,090] INFO ctc_app - 图像处理完成，生成统计结果：['1', '2', '3', '4', '5']
 [2025-11-05 20:35:17,090] INFO ctc_app - 报告元数据：{'宠物姓名:': '', '宠主姓名:': '', '年龄:': '', '性别:': '', '标本类型:': '', '一周内是否有药物摄入': '', '药物名称:': '', '备注:': ''}
 [2025-11-05 20:35:17,227] INFO ctc_app - 报告已生成：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-0piahzl3\results\ctc_report.docx
+[2025-11-05 20:56:03,399] INFO ctc_app - 启动token验证成功
+[2025-11-05 20:56:08,272] INFO ctc_app - 收到CTC报告生成请求：zip文件=False，多文件数量=21，圆度阈值=0.30
+[2025-11-05 20:56:08,316] INFO ctc_app - 已接收多文件上传，工作目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-hyzdwfnu
+[2025-11-05 20:56:08,316] INFO ctc_app - 开始处理影像数据，数据根目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-hyzdwfnu\uploaded\a
+[2025-11-05 20:56:08,316] INFO ctc - 处理蓝色图像: 2b.tif
+[2025-11-05 20:56:11,684] INFO ctc -   - CTC: 3, WBC: 0
+[2025-11-05 20:56:11,684] INFO ctc - 处理蓝色图像: 8b.tif
+[2025-11-05 20:56:14,766] INFO ctc -   - CTC: 2, WBC: 0
+[2025-11-05 20:56:14,766] INFO ctc - 通道 1 统计: CTC总数=5, WBC总数=0
+[2025-11-05 20:56:14,766] INFO ctc - 处理蓝色图像: 3b.tif
+[2025-11-05 20:56:17,416] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 20:56:17,416] INFO ctc - 通道 2 统计: CTC总数=0, WBC总数=0
+[2025-11-05 20:56:17,416] INFO ctc - 处理蓝色图像: 21b.tif
+[2025-11-05 20:56:19,952] INFO ctc -   - CTC: 13, WBC: 4
+[2025-11-05 20:56:19,952] INFO ctc - 处理蓝色图像: 6b.tif
+[2025-11-05 20:56:23,012] INFO ctc -   - CTC: 3, WBC: 1
+[2025-11-05 20:56:23,012] INFO ctc - 通道 3 统计: CTC总数=16, WBC总数=5
+[2025-11-05 20:56:23,030] INFO ctc - 处理蓝色图像: 13b.tif
+[2025-11-05 20:56:26,094] INFO ctc -   - CTC: 10, WBC: 5
+[2025-11-05 20:56:26,094] INFO ctc - 通道 4 统计: CTC总数=10, WBC总数=5
+[2025-11-05 20:56:26,094] INFO ctc - 处理蓝色图像: 29b.tif
+[2025-11-05 20:56:29,342] INFO ctc -   - CTC: 1, WBC: 0
+[2025-11-05 20:56:29,342] INFO ctc - 通道 5 统计: CTC总数=1, WBC总数=0
+[2025-11-05 20:56:29,345] INFO ctc_app - 图像处理完成，生成统计结果：['1', '2', '3', '4', '5']
+[2025-11-05 20:56:29,346] INFO ctc_app - 报告元数据：{'宠物姓名:': '', '宠主姓名:': '', '年龄:': '', '性别:': '', '标本类型:': '', '一周内是否有药物摄入': '', '药物名称:': '', '备注:': ''}
+[2025-11-05 20:56:29,540] INFO ctc_app - 报告已生成：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-hyzdwfnu\results\ctc_report.docx
+[2025-11-05 21:11:51,706] INFO ctc_app - 收到CTC报告生成请求：zip文件=False，多文件数量=28，圆度阈值=0.30
+[2025-11-05 21:11:51,730] INFO ctc_app - 已接收多文件上传，工作目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a
+[2025-11-05 21:11:51,731] INFO ctc_app - 开始处理影像数据，数据根目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b
+[2025-11-05 21:11:51,731] INFO ctc - 处理蓝色图像: 2b.tif
+[2025-11-05 21:11:54,180] INFO ctc -   - CTC: 5, WBC: 0
+[2025-11-05 21:11:54,180] INFO ctc - 处理蓝色图像: 2bb.tif
+[2025-11-05 21:11:54,180] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\1\2bg.tif
+[2025-11-05 21:11:54,180] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:11:54,180] INFO ctc - 处理蓝色图像: 8b.tif
+[2025-11-05 21:11:56,558] INFO ctc -   - CTC: 2, WBC: 0
+[2025-11-05 21:11:56,558] INFO ctc - 处理蓝色图像: 8bb.tif
+[2025-11-05 21:11:56,558] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\1\8bg.tif
+[2025-11-05 21:11:56,558] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:11:56,558] INFO ctc - 通道 1 统计: CTC总数=7, WBC总数=0
+[2025-11-05 21:11:56,558] INFO ctc - 处理蓝色图像: 3b.tif
+[2025-11-05 21:11:58,700] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:11:58,701] INFO ctc - 处理蓝色图像: 3bb.tif
+[2025-11-05 21:11:58,701] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\2\3bg.tif
+[2025-11-05 21:11:58,701] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:11:58,701] INFO ctc - 通道 2 统计: CTC总数=0, WBC总数=0
+[2025-11-05 21:11:58,701] INFO ctc - 处理蓝色图像: 21b.tif
+[2025-11-05 21:12:00,919] INFO ctc -   - CTC: 7, WBC: 4
+[2025-11-05 21:12:00,919] INFO ctc - 处理蓝色图像: 21bb.tif
+[2025-11-05 21:12:00,927] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\3\21bg.tif
+[2025-11-05 21:12:00,927] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:12:00,928] INFO ctc - 处理蓝色图像: 6b.tif
+[2025-11-05 21:12:03,351] INFO ctc -   - CTC: 3, WBC: 1
+[2025-11-05 21:12:03,351] INFO ctc - 处理蓝色图像: 6bb.tif
+[2025-11-05 21:12:03,351] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\3\6bg.tif
+[2025-11-05 21:12:03,351] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:12:03,351] INFO ctc - 通道 3 统计: CTC总数=10, WBC总数=5
+[2025-11-05 21:12:03,351] INFO ctc - 处理蓝色图像: 13b.tif
+[2025-11-05 21:12:05,787] INFO ctc -   - CTC: 10, WBC: 6
+[2025-11-05 21:12:05,787] INFO ctc - 处理蓝色图像: 13bb.tif
+[2025-11-05 21:12:05,795] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\4\13bg.tif
+[2025-11-05 21:12:05,795] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:12:05,795] INFO ctc - 通道 4 统计: CTC总数=10, WBC总数=6
+[2025-11-05 21:12:05,795] INFO ctc - 处理蓝色图像: 29b.tif
+[2025-11-05 21:12:08,114] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:12:08,114] INFO ctc - 处理蓝色图像: 29bb.tif
+[2025-11-05 21:12:08,114] WARNING ctc - 警告: 找不到绿色图像 C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\uploaded\b\5\29bg.tif
+[2025-11-05 21:12:08,114] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:12:08,114] INFO ctc - 通道 5 统计: CTC总数=0, WBC总数=0
+[2025-11-05 21:12:08,114] INFO ctc_app - 图像处理完成，生成统计结果：['1', '2', '3', '4', '5']
+[2025-11-05 21:12:08,114] INFO ctc_app - 报告元数据：{'宠物姓名:': 'aa', '宠主姓名:': 'bb', '年龄:': '1', '性别:': '公', '标本类型:': 'VC', '一周内是否有药物摄入': '是', '药物名称:': '?', '备注:': '无'}
+[2025-11-05 21:12:08,277] INFO ctc_app - 报告已生成：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-523lvq6a\results\ctc_report.docx
+[2025-11-05 21:13:01,926] INFO ctc_app - 收到CTC报告生成请求：zip文件=False，多文件数量=21，圆度阈值=0.30
+[2025-11-05 21:13:01,961] INFO ctc_app - 已接收多文件上传，工作目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-3cac9mwq
+[2025-11-05 21:13:01,961] INFO ctc_app - 开始处理影像数据，数据根目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-3cac9mwq\uploaded\a
+[2025-11-05 21:13:01,961] INFO ctc - 处理蓝色图像: 2b.tif
+[2025-11-05 21:13:05,112] INFO ctc -   - CTC: 3, WBC: 0
+[2025-11-05 21:13:05,112] INFO ctc - 处理蓝色图像: 8b.tif
+[2025-11-05 21:13:08,236] INFO ctc -   - CTC: 2, WBC: 0
+[2025-11-05 21:13:08,236] INFO ctc - 通道 1 统计: CTC总数=5, WBC总数=0
+[2025-11-05 21:13:08,236] INFO ctc - 处理蓝色图像: 3b.tif
+[2025-11-05 21:13:10,929] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-05 21:13:10,929] INFO ctc - 通道 2 统计: CTC总数=0, WBC总数=0
+[2025-11-05 21:13:10,929] INFO ctc - 处理蓝色图像: 21b.tif
+[2025-11-05 21:13:13,419] INFO ctc -   - CTC: 13, WBC: 4
+[2025-11-05 21:13:13,419] INFO ctc - 处理蓝色图像: 6b.tif
+[2025-11-05 21:13:16,531] INFO ctc -   - CTC: 3, WBC: 1
+[2025-11-05 21:13:16,532] INFO ctc - 通道 3 统计: CTC总数=16, WBC总数=5
+[2025-11-05 21:13:16,533] INFO ctc - 处理蓝色图像: 13b.tif
+[2025-11-05 21:13:19,657] INFO ctc -   - CTC: 10, WBC: 5
+[2025-11-05 21:13:19,657] INFO ctc - 通道 4 统计: CTC总数=10, WBC总数=5
+[2025-11-05 21:13:19,657] INFO ctc - 处理蓝色图像: 29b.tif
+[2025-11-05 21:13:22,783] INFO ctc -   - CTC: 1, WBC: 0
+[2025-11-05 21:13:22,783] INFO ctc - 通道 5 统计: CTC总数=1, WBC总数=0
+[2025-11-05 21:13:22,783] INFO ctc_app - 图像处理完成，生成统计结果：['1', '2', '3', '4', '5']
+[2025-11-05 21:13:22,783] INFO ctc_app - 报告元数据：{'宠物姓名:': 'aa', '宠主姓名:': 'bb', '年龄:': '1', '性别:': '公', '标本类型:': 'VC', '一周内是否有药物摄入': '是', '药物名称:': '?', '备注:': '无'}
+[2025-11-05 21:13:22,917] INFO ctc_app - 报告已生成：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-3cac9mwq\results\ctc_report.docx
