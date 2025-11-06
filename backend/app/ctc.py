@@ -325,11 +325,6 @@ class CTCAnalyzer:
                     # 在增强后的图像上标记细胞
                     self._mark_cell(enhanced_blue_with_boxes, enhanced_green_with_boxes,
                                     enhanced_red_with_boxes, bounding_rect, 'ctc')
-                    self._draw_rectangle(
-                        [ctc_only_blue, ctc_only_green, ctc_only_red],
-                        bounding_rect,
-                        (255, 255, 255)
-                    )
 
                 elif is_wbc:
                     wbc_count += 1
@@ -420,13 +415,6 @@ class CTCAnalyzer:
 
         # 在三个通道上绘制矩形
         for img in [blue_img, green_img, red_img]:
-            cv2.rectangle(img, (x, y), (x + w, y + h), color, 1)
-
-    def _draw_rectangle(self, images: List[np.ndarray], bounding_rect: Tuple,
-                        color: Tuple[int, int, int]) -> None:
-        """在给定图像列表上绘制矩形框"""
-        x, y, w, h = bounding_rect
-        for img in images:
             cv2.rectangle(img, (x, y), (x + w, y + h), color, 1)
 
     def _save_results(self, blue_img: np.ndarray, green_img: np.ndarray,
