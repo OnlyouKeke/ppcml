@@ -120,33 +120,38 @@
             class="mask-empty"
           />
           <div v-else class="mask-options-wrapper">
-            <el-radio-group v-model="selectedMaskOptionId" class="mask-option-group">
-              <el-radio
-                v-for="option in maskOptions"
-                :key="option.id"
-                :label="option.id"
-                class="mask-option-radio"
-              >
-                {{ option.label }}
-              </el-radio>
-            </el-radio-group>
             <div class="mask-preview-grid">
               <div
                 v-for="option in maskOptions"
                 :key="`preview-${option.id}`"
-                :class="['mask-preview-item', { active: option.id === selectedMaskOptionId }]"
-                @click="selectedMaskOptionId = option.id"
+                :class="[
+                  'mask-preview-item',
+                  { active: maskSelectionOrderMap.get(option.id) }
+                ]"
+                @click="toggleMaskSelection(option.id)"
               >
                 <img
                   :src="`data:${option.mimeType};base64,${option.data}`"
                   :alt="option.label"
                   class="mask-preview-image"
                 />
-                <div class="mask-preview-label">{{ option.label }}</div>
+                <div class="mask-preview-label">
+                  {{ option.label }}
+                  <el-tag
+                    v-if="maskSelectionOrderMap.get(option.id)"
+                    size="small"
+                    class="mask-selection-order"
+                  >
+                    第{{ maskSelectionOrderMap.get(option.id) }}张
+                  </el-tag>
+                </div>
               </div>
             </div>
-            <div v-if="selectedMaskOption" class="mask-selected-tip">
-              已选择：{{ selectedMaskOption.label }}
+            <div class="mask-selected-tip">
+              已选择 {{ selectedMaskOptions.length }} / {{ requiredMaskSelectionCount }} 张掩码图像
+            </div>
+            <div v-if="!isMaskSelectionComplete" class="mask-selection-warning">
+              请从上述掩码图像中选择 {{ requiredMaskSelectionCount }} 张，将用于报告预览与导出。
             </div>
           </div>
         </div>
@@ -160,7 +165,10 @@
             <div v-if="isPreviewLoading" class="preview-loading">
               <el-skeleton :rows="8" animated />
             </div>
-            <div v-else-if="reportData" class="preview-content">
+            <div
+              v-else-if="reportData && isMaskSelectionComplete"
+              class="preview-content"
+            >
               <div class="preview-header">
                 <div class="preview-heading">
                   <h3 class="preview-title">检测报告</h3>
@@ -209,6 +217,15 @@
               <footer class="preview-footer">
                 检测人：______________&nbsp;&nbsp;&nbsp;&nbsp;审核人：______________&nbsp;&nbsp;&nbsp;&nbsp;报告日期：______________
               </footer>
+            </div>
+            <div
+              v-else-if="reportData && !isMaskSelectionComplete"
+              class="preview-blocker"
+            >
+              <el-empty
+                description="请选择三张掩码图像后查看报告预览"
+                :image-size="120"
+              />
             </div>
             <el-empty v-else description="请先生成报告以查看预览" :image-size="120" />
           </div>
@@ -304,11 +321,13 @@ const generatedReportBlob = ref<Blob | null>(null)
 const generatedReportUrl = ref('')
 const reportToken = ref('')
 const maskOptions = ref<ReportMaskOption[]>([])
-const selectedMaskOptionId = ref('')
+const selectedMaskOptionIds = ref<string[]>([])
 const previewError = ref('')
 const previewWarnings = ref<string[]>([])
 const isPreviewLoading = ref(false)
 const isExporting = ref(false)
+
+const requiredMaskSelectionCount = 3
 
 const heartbeatIntervalMs = 5000
 let heartbeatTimer: number | null = null
@@ -318,9 +337,23 @@ let heartbeatDisconnectNotified = false
 const roundnessThreshold = ref(0.3)
 
 const hasReport = computed(() => Boolean(reportData.value))
-const canDownloadReport = computed(() => Boolean(reportToken.value))
-const selectedMaskOption = computed(() =>
-  maskOptions.value.find(option => option.id === selectedMaskOptionId.value) ?? null
+const selectedMaskOptions = computed(() =>
+  selectedMaskOptionIds.value
+    .map(id => maskOptions.value.find(option => option.id === id) ?? null)
+    .filter((option): option is ReportMaskOption => Boolean(option))
+)
+const isMaskSelectionComplete = computed(
+  () => selectedMaskOptions.value.length === requiredMaskSelectionCount
+)
+const maskSelectionOrderMap = computed(() => {
+  const order = new Map<string, number>()
+  selectedMaskOptionIds.value.forEach((id, index) => {
+    order.set(id, index + 1)
+  })
+  return order
+})
+const canDownloadReport = computed(
+  () => Boolean(reportToken.value) && isMaskSelectionComplete.value
 )
 
 const sanitizeText = (value: string | null | undefined) => {
@@ -435,7 +468,20 @@ const channelSummaryTexts = computed(() => {
     .filter((text): text is string => Boolean(text))
 })
 
+const selectedMaskPreviewItems = computed<ChannelPreviewItem[]>(() => {
+  if (!isMaskSelectionComplete.value) {
+    return []
+  }
+  return selectedMaskOptions.value.map(option => ({
+    label: option.label,
+    src: `data:${option.mimeType};base64,${option.data}`
+  }))
+})
+
 const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
+  if (selectedMaskPreviewItems.value.length) {
+    return selectedMaskPreviewItems.value
+  }
   const items = reportData.value?.imageSet?.items ?? []
   if (!items.length) {
     return []
@@ -447,6 +493,21 @@ const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
       src: `data:${item.mimeType};base64,${item.data}`
     }))
 })
+
+const toggleMaskSelection = (optionId: string) => {
+  const currentIndex = selectedMaskOptionIds.value.indexOf(optionId)
+  if (currentIndex >= 0) {
+    selectedMaskOptionIds.value.splice(currentIndex, 1)
+    return
+  }
+
+  if (selectedMaskOptionIds.value.length >= requiredMaskSelectionCount) {
+    ElMessage.warning(`最多只能选择${requiredMaskSelectionCount}张掩码图像`)
+    return
+  }
+
+  selectedMaskOptionIds.value.push(optionId)
+}
 
 const expectedChannels = ['1', '2', '3', '4', '5']
 
@@ -462,7 +523,7 @@ const resetPreview = () => {
   previewWarnings.value = []
   reportToken.value = ''
   maskOptions.value = []
-  selectedMaskOptionId.value = ''
+  selectedMaskOptionIds.value = []
   isExporting.value = false
 }
 
@@ -585,7 +646,7 @@ const runDetection = async () => {
   generatedReportBlob.value = null
   reportToken.value = ''
   maskOptions.value = []
-  selectedMaskOptionId.value = ''
+  selectedMaskOptionIds.value = []
   reportData.value = null
 
   try {
@@ -615,8 +676,16 @@ const runDetection = async () => {
     reportData.value = response
     reportToken.value = response.reportToken ?? ''
     maskOptions.value = response.maskOptions ?? []
-    selectedMaskOptionId.value = maskOptions.value[0]?.id ?? ''
+    selectedMaskOptionIds.value = []
     previewWarnings.value = response.warnings ?? []
+    if (
+      maskOptions.value.length > 0 &&
+      maskOptions.value.length < requiredMaskSelectionCount
+    ) {
+      ElMessage.warning(
+        `仅检测到 ${maskOptions.value.length} 张掩码图像，请确认影像数据是否完整`
+      )
+    }
     ElMessage.success('报告生成成功，预览已同步更新')
   } catch (error) {
     previewError.value = '报告生成失败，请稍后重试。'
@@ -657,8 +726,8 @@ const downloadDocx = async () => {
     return
   }
 
-  if (maskOptions.value.length && !selectedMaskOptionId.value) {
-    ElMessage.warning('请选择要插入的掩码图像')
+  if (!isMaskSelectionComplete.value) {
+    ElMessage.warning(`请选择${requiredMaskSelectionCount}张掩码图像后再导出`)
     return
   }
 
@@ -666,7 +735,7 @@ const downloadDocx = async () => {
     isExporting.value = true
     const response = await postExportCtcReport({
       reportToken: reportToken.value,
-      maskOptionId: selectedMaskOptionId.value || undefined
+      maskOptionIds: [...selectedMaskOptionIds.value]
     })
 
     applyReportBlob(response)
@@ -893,16 +962,6 @@ onBeforeUnmount(() => {
   gap: 14px;
 }
 
-.mask-option-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-}
-
-.mask-option-radio {
-  margin-right: 0;
-}
-
 .mask-preview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -945,12 +1004,30 @@ onBeforeUnmount(() => {
   font-weight: 600;
   color: #1e3a8a;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
 }
 
 .mask-selected-tip {
   font-size: 13px;
   font-weight: 600;
   color: #4338ca;
+}
+
+.mask-selection-order {
+  background: rgba(99, 102, 241, 0.12);
+  border: none;
+  color: #4338ca;
+}
+
+.mask-selection-warning {
+  font-size: 12px;
+  color: #b91c1c;
+  background: rgba(248, 113, 113, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
 }
 
 .mask-empty {
@@ -968,7 +1045,8 @@ onBeforeUnmount(() => {
 
 .preview-loading,
 .preview-content,
-.el-empty {
+.el-empty,
+.preview-blocker {
   width: 100%;
 }
 
@@ -1065,6 +1143,12 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 4px;
   margin-bottom: 12px;
+}
+
+.preview-blocker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .channel-summary-text {
