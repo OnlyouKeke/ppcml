@@ -357,6 +357,8 @@ def _build_report_document(
     output_path: Path,
     channel_summary_texts: list[str] | None = None,
     mask_option: dict | None = None,
+    *,
+    mask_options: list[dict] | None = None,
 ) -> None:
     document = Document()
     logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
@@ -434,9 +436,22 @@ def _build_report_document(
                     return candidate
             return None
 
+        selected_labels_and_paths: list[tuple[str, str]] = []
+
+        if mask_options:
+            for index, option in enumerate(mask_options):
+                candidate_path = option.get("path")
+                if not candidate_path or not os.path.exists(candidate_path):
+                    logger.warning(
+                        "所选掩码图像不存在或不可访问：%s", candidate_path
+                    )
+                    continue
+                label = option.get("label") or f"掩码图像 {index + 1}"
+                selected_labels_and_paths.append((label, candidate_path))
+
         mask_override_path: str | None = None
         mask_override_label: str | None = None
-        if mask_option:
+        if mask_option and not selected_labels_and_paths:
             candidate_path = mask_option.get("path")
             if candidate_path and os.path.exists(candidate_path):
                 mask_override_path = candidate_path
@@ -444,19 +459,23 @@ def _build_report_document(
             else:
                 logger.warning("指定的掩码图像不存在或不可访问：%s", candidate_path)
 
-        labels_and_paths = [
-            ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
-            ("绿色通道", _resolve_preview_path("green_path", "green_original")),
-            ("红色通道", _resolve_preview_path("red_path", "red_original")),
-        ]
+        if selected_labels_and_paths:
+            labels_and_paths = selected_labels_and_paths
+        else:
+            labels_and_paths = [
+                ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
+                ("绿色通道", _resolve_preview_path("green_path", "green_original")),
+                ("红色通道", _resolve_preview_path("red_path", "red_original")),
+            ]
 
-        if mask_override_path:
-            labels_and_paths[2] = (
-                mask_override_label or "掩码图像",
-                mask_override_path,
-            )
+            if mask_override_path:
+                labels_and_paths[2] = (
+                    mask_override_label or "掩码图像",
+                    mask_override_path,
+                )
 
-        image_table = document.add_table(rows=2, cols=3)
+        column_count = max(1, len(labels_and_paths))
+        image_table = document.add_table(rows=2, cols=column_count)
         image_table.autofit = True
         image_table.style = None
         _set_table_transparent(image_table)
@@ -882,11 +901,13 @@ async def generate_ctc_report(
 async def export_ctc_report(
     report_token: str = Form(..., alias="reportToken"),
     mask_option_id: str = Form("", alias="maskOptionId"),
+    mask_option_ids: str = Form("", alias="maskOptionIds"),
 ) -> JSONResponse:
     logger.info(
-        "收到报告导出请求：report_token=%s, mask_option_id=%s",
+        "收到报告导出请求：report_token=%s, mask_option_id=%s, mask_option_ids=%s",
         report_token,
         mask_option_id,
+        mask_option_ids,
     )
 
     if not report_token:
@@ -918,29 +939,62 @@ async def export_ctc_report(
     channel_summary_texts = state_data.get("channelSummaryTexts") or []
     mask_options_state = state_data.get("maskOptions") or []
 
-    mask_option_payload: dict | None = None
-    if mask_option_id:
-        option = next((item for item in mask_options_state if item.get("id") == mask_option_id), None)
-        if option is None:
-            raise HTTPException(status_code=400, detail="所选掩码图像不存在")
-
-        relative_path = option.get("relativePath")
-        if not relative_path:
-            raise HTTPException(status_code=400, detail="所选掩码图像路径无效")
-
-        mask_path = (output_dir / relative_path).resolve()
+    selected_mask_option_ids: list[str] = []
+    if mask_option_ids:
         try:
-            mask_path.relative_to(output_dir)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail="掩码图像路径无效") from exc
+            parsed_ids = json.loads(mask_option_ids)
+        except json.JSONDecodeError as exc:
+            logger.warning("掩码图像选择解析失败：%s", mask_option_ids)
+            raise HTTPException(status_code=400, detail="掩码图像选择格式无效") from exc
 
-        if not mask_path.exists():
-            raise HTTPException(status_code=400, detail="所选掩码图像文件不存在")
+        if not isinstance(parsed_ids, list):
+            raise HTTPException(status_code=400, detail="掩码图像选择格式无效")
 
-        mask_option_payload = {
-            "path": str(mask_path),
-            "label": option.get("label") or f"{option.get('channel', '')}通道掩码",
-        }
+        for item in parsed_ids:
+            if not isinstance(item, str):
+                raise HTTPException(status_code=400, detail="掩码图像选择格式无效")
+            normalized = item.strip()
+            if normalized and normalized not in selected_mask_option_ids:
+                selected_mask_option_ids.append(normalized)
+
+    elif mask_option_id:
+        normalized = mask_option_id.strip()
+        if normalized:
+            selected_mask_option_ids.append(normalized)
+
+    required_mask_count = 3
+    if selected_mask_option_ids and len(selected_mask_option_ids) != required_mask_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"必须选择{required_mask_count}张掩码图像",
+        )
+
+    mask_option_payloads: list[dict] = []
+    if selected_mask_option_ids:
+        for option_id in selected_mask_option_ids:
+            option = next((item for item in mask_options_state if item.get("id") == option_id), None)
+            if option is None:
+                raise HTTPException(status_code=400, detail="所选掩码图像不存在")
+
+            relative_path = option.get("relativePath")
+            if not relative_path:
+                raise HTTPException(status_code=400, detail="所选掩码图像路径无效")
+
+            mask_path = (output_dir / relative_path).resolve()
+            try:
+                mask_path.relative_to(output_dir)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="掩码图像路径无效") from exc
+
+            if not mask_path.exists():
+                raise HTTPException(status_code=400, detail="所选掩码图像文件不存在")
+
+            mask_option_payloads.append(
+                {
+                    "path": str(mask_path),
+                    "label": option.get("label") or f"{option.get('channel', '')}通道掩码",
+                }
+            )
 
     analyzer_stub = SimpleNamespace(results=results)
     report_path = output_dir / "ctc_report.docx"
@@ -950,7 +1004,7 @@ async def export_ctc_report(
         metadata,
         report_path,
         channel_summary_texts=channel_summary_texts,
-        mask_option=mask_option_payload,
+        mask_options=mask_option_payloads or None,
     )
     logger.info("报告文档已生成：%s", report_path)
 
