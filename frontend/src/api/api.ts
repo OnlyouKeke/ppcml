@@ -185,16 +185,23 @@ export const postGenerateCtcReport = async ({
 
 interface ExportReportPayload {
   reportToken: string
+  maskOptionIds?: string[]
   maskOptionId?: string
 }
 
 export const postExportCtcReport = async ({
   reportToken,
+  maskOptionIds,
   maskOptionId
 }: ExportReportPayload): Promise<CtcReportDocxResponse> => {
   const formData = new FormData()
   formData.append('reportToken', reportToken)
   formData.append('maskOptionId', maskOptionId ?? '')
+  if (maskOptionIds && maskOptionIds.length) {
+    formData.append('maskOptionIds', JSON.stringify(maskOptionIds))
+  } else {
+    formData.append('maskOptionIds', '')
+  }
 
   try {
     const response = (await api.post<CtcReportDocxResponse>('/ctc/report/export', formData, {
