@@ -7,13 +7,12 @@
       </div>
     </header>
 
-    <el-row :gutter="24" class="layout">
-      <el-col :xs="24" :md="10" class="form-column">
-        <el-card shadow="hover" class="form-card">
-          <template #header>
-            <div class="card-title">基础信息填写</div>
-          </template>
-          <el-form :model="form" label-width="120px" label-position="left" class="info-form">
+    <section class="layout">
+      <el-card shadow="hover" class="form-card">
+        <template #header>
+          <div class="card-title">基础信息填写</div>
+        </template>
+        <el-form :model="form" label-width="120px" label-position="left" class="info-form">
             <el-row :gutter="16" class="form-row">
               <el-col :xs="24" :sm="12">
                 <el-form-item label="宠物姓名">
@@ -99,17 +98,14 @@
                 <div v-else class="upload-tip">请选择包含五个通道的影像文件夹</div>
               </div>
             </el-form-item>
-          </el-form>
-        </el-card>
+        </el-form>
+      </el-card>
 
-      </el-col>
-
-      <el-col :xs="24" :md="14" class="preview-column">
-        <el-card shadow="hover" class="preview-card">
-          <template #header>
-            <div class="card-title">报告预览</div>
-          </template>
-          <div class="preview-wrapper">
+      <el-card shadow="hover" class="preview-card">
+        <template #header>
+          <div class="card-title">报告预览</div>
+        </template>
+        <div class="preview-wrapper">
             <div v-if="isPreviewLoading" class="preview-loading">
               <el-skeleton :rows="8" animated />
             </div>
@@ -186,8 +182,7 @@
             <el-button :disabled="!hasReport" @click="resetAll">重置内容</el-button>
           </div>
         </el-card>
-      </el-col>
-    </el-row>
+    </section>
   </div>
 </template>
 
@@ -691,7 +686,9 @@ onBeforeUnmount(() => {
 }
 
 .layout {
-  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
 .form-card,
