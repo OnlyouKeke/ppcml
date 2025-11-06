@@ -96,8 +96,8 @@ export const getHeartbeat = async (): Promise<HeartbeatResponse> => {
 }
 
 interface CtcReportPayload {
-  files: FileWithRelativePath[]
-  form: {
+  files?: FileWithRelativePath[]
+  form?: {
     petName: string
     ownerName: string
     age: string
@@ -108,36 +108,60 @@ interface CtcReportPayload {
     medicationDetails?: string
   }
   roundnessThreshold?: number
+  generateDocx?: boolean
+  sessionId?: string
+  selectedMask?: string
 }
 
 export const postGenerateCtcReport = async ({
   files,
   form,
-  roundnessThreshold = 0.3
+  roundnessThreshold = 0.3,
+  generateDocx = false,
+  sessionId = '',
+  selectedMask = ''
 }: CtcReportPayload): Promise<CtcReportResponse> => {
   const formData = new FormData()
+  const uploadFiles = files ?? []
   console.debug('[API] Preparing CTC report request', {
-    fileCount: files.length,
-    fileNames: files.map(file =>
+    fileCount: uploadFiles.length,
+    fileNames: uploadFiles.map(file =>
       (file as FileWithRelativePath).webkitRelativePath || file.name
     ),
     form,
-    roundnessThreshold
+    roundnessThreshold,
+    generateDocx,
+    sessionId,
+    selectedMask
   })
-  files.forEach(file => {
+  uploadFiles.forEach(file => {
     const relativePath = (file as FileWithRelativePath).webkitRelativePath || file.name
     formData.append('files', file, relativePath)
   })
 
-  formData.append('petName', form.petName || '')
-  formData.append('ownerName', form.ownerName || '')
-  formData.append('age', form.age || '')
-  formData.append('gender', form.gender || '')
-  formData.append('notes', form.notes || '')
-  formData.append('sampleType', form.sampleType || '')
-  formData.append('medicationIntake', form.medicationIntake || '')
-  formData.append('medicationDetails', form.medicationDetails || '')
+  if (form) {
+    formData.append('petName', form.petName || '')
+    formData.append('ownerName', form.ownerName || '')
+    formData.append('age', form.age || '')
+    formData.append('gender', form.gender || '')
+    formData.append('notes', form.notes || '')
+    formData.append('sampleType', form.sampleType || '')
+    formData.append('medicationIntake', form.medicationIntake || '')
+    formData.append('medicationDetails', form.medicationDetails || '')
+  } else {
+    formData.append('petName', '')
+    formData.append('ownerName', '')
+    formData.append('age', '')
+    formData.append('gender', '')
+    formData.append('notes', '')
+    formData.append('sampleType', '')
+    formData.append('medicationIntake', '')
+    formData.append('medicationDetails', '')
+  }
   formData.append('roundnessThreshold', String(roundnessThreshold))
+  formData.append('generateDocx', generateDocx ? 'true' : 'false')
+  formData.append('sessionId', sessionId)
+  formData.append('selectedMask', selectedMask)
 
   try {
     const response = (await api.post<CtcReportResponse>('/ctc/report', formData, {

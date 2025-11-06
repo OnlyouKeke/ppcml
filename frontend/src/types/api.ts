@@ -25,6 +25,18 @@ export interface ReportImageSet {
   items: ReportImageItem[]
 }
 
+export interface MaskOptionItem {
+  label: string
+  relativePath: string
+  mimeType: string
+  data: string
+}
+
+export interface MaskOptionGroup {
+  channel: string
+  items: MaskOptionItem[]
+}
+
 export interface CtcReportResponse {
   fileName: string
   fileContent: string
@@ -42,4 +54,6 @@ export interface CtcReportResponse {
   imageSet?: ReportImageSet | null
   channelSummaryTexts?: string[]
   warnings?: string[]
+  sessionId?: string
+  maskOptions?: MaskOptionGroup[]
 }

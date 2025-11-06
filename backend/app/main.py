@@ -30,6 +30,7 @@ if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
     )
 
 import base64
+import json
 import shutil
 import io
 import mimetypes
@@ -39,7 +40,7 @@ import zipfile
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Dict, Any
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -49,7 +50,7 @@ from docx.shared import Pt, RGBColor, Inches
 import cv2
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse,JSONResponse
+from fastapi.responses import JSONResponse
 
 try:
     from .ctc import CTCAnalyzer
@@ -88,6 +89,12 @@ logging.basicConfig(
 logger = logging.getLogger("ctc_app")
 
 INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
+
+ANALYSIS_SNAPSHOT_FILE = "analysis.json"
+
+
+def _snapshot_file_path(output_dir: Path) -> Path:
+    return output_dir / ANALYSIS_SNAPSHOT_FILE
 
 
 def verify_startup_token() -> None:
@@ -231,6 +238,245 @@ def _encode_preview_image(image_path: Path) -> tuple[str, str] | None:
         return None
 
 
+def _ensure_within_directory(path: Path, base_dir: Path) -> Path:
+    base_resolved = base_dir.resolve()
+    candidate = path.resolve()
+    try:
+        candidate.relative_to(base_resolved)
+    except ValueError as exc:  # pragma: no cover - 安全检查
+        raise HTTPException(status_code=400, detail="所选文件路径无效") from exc
+    return candidate
+
+
+def _normalize_relative_path(path_value: str | Path, base_dir: Path) -> str:
+    candidate = Path(path_value)
+    resolved = candidate.resolve()
+    base_resolved = base_dir.resolve()
+    try:
+        relative = resolved.relative_to(base_resolved)
+    except ValueError as exc:  # pragma: no cover - 安全检查
+        raise HTTPException(status_code=400, detail="生成的文件路径越界") from exc
+    return str(relative)
+
+
+def _normalize_image_set_paths(image_set: Dict[str, Any], base_dir: Path) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = {}
+    for key, value in image_set.items():
+        if key == "sub_folder":
+            normalized[key] = value
+            continue
+        if isinstance(value, str) or isinstance(value, Path):
+            normalized[key] = _normalize_relative_path(value, base_dir)
+        else:
+            normalized[key] = value
+    return normalized
+
+
+def _resolve_snapshot_path(relative_path: str, base_dir: Path) -> Path:
+    candidate = base_dir / relative_path
+    if not candidate.exists():
+        raise HTTPException(status_code=404, detail="所选文件不存在，请重新生成报告")
+    return _ensure_within_directory(candidate, base_dir)
+
+
+def _resolve_image_sets(relative_sets: List[Dict[str, Any]], base_dir: Path) -> List[Dict[str, Any]]:
+    resolved_sets: List[Dict[str, Any]] = []
+    for image_set in relative_sets:
+        resolved: Dict[str, Any] = {}
+        for key, value in image_set.items():
+            if key == "sub_folder":
+                resolved[key] = value
+            elif isinstance(value, str):
+                resolved[key] = _resolve_snapshot_path(value, base_dir)
+            else:
+                resolved[key] = value
+        resolved_sets.append(resolved)
+    return resolved_sets
+
+
+def _ordered_metadata_from_snapshot(snapshot: Dict[str, Any]) -> OrderedDict[str, str]:
+    ordered = OrderedDict()
+    for item in snapshot.get("metadata", []):
+        label = item.get("label", "") if isinstance(item, dict) else ""
+        value = item.get("value", "") if isinstance(item, dict) else ""
+        ordered[label] = value
+    return ordered
+
+
+def _build_mask_options_payload(output_dir: Path, mask_candidates: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+    payload: List[Dict[str, Any]] = []
+    for channel in sorted(mask_candidates.keys()):
+        items_payload: List[Dict[str, Any]] = []
+        for relative_path in mask_candidates[channel]:
+            try:
+                absolute_path = _resolve_snapshot_path(relative_path, output_dir)
+            except HTTPException:
+                continue
+            encoded_preview = _encode_preview_image(absolute_path)
+            if not encoded_preview:
+                continue
+            mime_type, encoded_data = encoded_preview
+            items_payload.append(
+                {
+                    "label": absolute_path.name,
+                    "relativePath": relative_path,
+                    "mimeType": mime_type or "image/png",
+                    "data": encoded_data,
+                }
+            )
+        if items_payload:
+            payload.append({"channel": channel, "items": items_payload})
+    return payload
+
+
+def _create_analysis_snapshot(
+    output_dir: Path,
+    metadata: OrderedDict[str, str],
+    analyzer: CTCAnalyzer,
+    channel_summary_texts: list[str],
+    result_text: str,
+    remark_text: str,
+    selection_text: str,
+) -> Dict[str, Any]:
+    doc_names = analyzer.results.get("doc_names", [])
+    ctc_counts = analyzer.results.get("green_single_channel", [])
+    wbc_counts = analyzer.results.get("white_single_channel", [])
+
+    totals = {"totalCtc": sum(ctc_counts), "totalWbc": sum(wbc_counts)}
+
+    raw_ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
+    normalized_ctc_sets = [
+        _normalize_image_set_paths(image_set, output_dir) for image_set in raw_ctc_image_sets
+    ]
+
+    raw_mask_candidates = analyzer.results.get("mask_candidates", {}) or {}
+    normalized_mask_candidates: Dict[str, List[str]] = {}
+    for channel, paths in raw_mask_candidates.items():
+        normalized_mask_candidates[channel] = [
+            _normalize_relative_path(path, output_dir) for path in paths
+        ]
+
+    snapshot = {
+        "metadata": [{"label": label, "value": value} for label, value in metadata.items()],
+        "docNames": doc_names,
+        "ctcCounts": ctc_counts,
+        "wbcCounts": wbc_counts,
+        "ctcImageSets": normalized_ctc_sets,
+        "channelSummaryTexts": channel_summary_texts,
+        "resultText": result_text,
+        "remarkText": remark_text,
+        "selectionText": selection_text,
+        "totals": totals,
+        "maskCandidates": normalized_mask_candidates,
+        "analysisCompletedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+    return snapshot
+
+
+def _write_analysis_snapshot(output_dir: Path, snapshot: Dict[str, Any]) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    snapshot_path = _snapshot_file_path(output_dir)
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_analysis_snapshot(output_dir: Path) -> Dict[str, Any]:
+    snapshot_path = _snapshot_file_path(output_dir)
+    if not snapshot_path.exists():
+        raise HTTPException(status_code=404, detail="未找到分析记录，请重新上传影像文件生成报告")
+    try:
+        return json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:  # pragma: no cover - 理论上不会触发
+        raise HTTPException(status_code=500, detail="分析记录损坏，请重新生成报告") from exc
+
+
+def _build_image_set_payload(snapshot: Dict[str, Any], output_dir: Path) -> Dict[str, Any] | None:
+    relative_sets = snapshot.get("ctcImageSets", []) or []
+    if not relative_sets:
+        return None
+
+    first_set = relative_sets[0]
+    images_payload: List[Dict[str, Any]] = []
+
+    def _encode_from_keys(label: str, keys: Iterable[str]) -> None:
+        for key in keys:
+            relative_path = first_set.get(key)
+            if not relative_path:
+                continue
+            try:
+                absolute_path = _resolve_snapshot_path(relative_path, output_dir)
+            except HTTPException:
+                continue
+            encoded_preview = _encode_preview_image(absolute_path)
+            if not encoded_preview:
+                continue
+            mime_type, encoded_data = encoded_preview
+            images_payload.append(
+                {
+                    "label": label,
+                    "mimeType": mime_type or "image/png",
+                    "data": encoded_data,
+                }
+            )
+            break
+
+    _encode_from_keys("蓝色通道", ("blue_path", "blue_original"))
+    _encode_from_keys("绿色通道", ("green_path", "green_original"))
+    _encode_from_keys("红色通道", ("mask_path", "red_path", "red_original"))
+
+    if images_payload:
+        return {"items": images_payload}
+    return None
+
+
+def _build_response_payload(
+    snapshot: Dict[str, Any],
+    output_dir: Path,
+    session_id: str,
+    generated_at: datetime,
+    file_bytes: bytes | None = None,
+) -> Dict[str, Any]:
+    metadata_items = snapshot.get("metadata", []) or []
+    doc_names = snapshot.get("docNames", []) or []
+    ctc_counts = snapshot.get("ctcCounts", []) or []
+    wbc_counts = snapshot.get("wbcCounts", []) or []
+
+    channel_stats = [
+        {"channel": name, "ctc": ctc, "wbc": wbc}
+        for name, ctc, wbc in zip(doc_names, ctc_counts, wbc_counts)
+    ]
+
+    totals = snapshot.get("totals") or {
+        "totalCtc": sum(ctc_counts),
+        "totalWbc": sum(wbc_counts),
+    }
+
+    mask_options = _build_mask_options_payload(output_dir, snapshot.get("maskCandidates", {}) or {})
+    image_set_payload = _build_image_set_payload(snapshot, output_dir)
+
+    file_content = ""
+    if file_bytes is not None:
+        file_content = base64.b64encode(file_bytes).decode("ascii")
+
+    response_payload: Dict[str, Any] = {
+        "fileName": "ctc_report.docx",
+        "fileContent": file_content,
+        "generatedAt": generated_at.isoformat().replace("+00:00", "Z"),
+        "metadata": metadata_items,
+        "channels": channel_stats,
+        "totals": totals,
+        "resultText": snapshot.get("resultText", ""),
+        "remarkText": snapshot.get("remarkText", ""),
+        "selectionText": snapshot.get("selectionText", ""),
+        "hasCtcImages": bool(image_set_payload),
+        "imageSet": image_set_payload,
+        "channelSummaryTexts": snapshot.get("channelSummaryTexts", []),
+        "warnings": snapshot.get("warnings", []),
+        "sessionId": session_id,
+        "maskOptions": mask_options,
+    }
+
+    return response_payload
 def _apply_run_style(run, size: int, bold: bool = False, color: RGBColor | None = None) -> None:
     font = run.font
     font.size = Pt(size)
@@ -349,11 +595,18 @@ def _format_channel_summary_texts(analyzer: CTCAnalyzer) -> list[str]:
     return [f"{label} {values}" for label, values in channel_summary_pairs]
 
 
-def _build_report_document(
-    analyzer: CTCAnalyzer,
+def _build_report_document_from_snapshot(
     metadata: OrderedDict[str, str],
+    doc_names: List[str],
+    ctc_counts: List[int],
+    wbc_counts: List[int],
+    ctc_image_sets: List[Dict[str, Any]],
     output_path: Path,
     channel_summary_texts: list[str] | None = None,
+    result_text: str | None = None,
+    remark_text: str | None = None,
+    selection_text: str | None = None,
+    selected_mask_path: Path | None = None,
 ) -> None:
     document = Document()
     logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
@@ -400,18 +653,15 @@ def _build_report_document(
     result_heading.paragraph_format.space_before = Pt(12)
     result_heading.paragraph_format.space_after = Pt(6)
 
-    doc_names = analyzer.results.get("doc_names", [])
-    ctc_counts = analyzer.results.get("green_single_channel", [])
-    wbc_counts = analyzer.results.get("white_single_channel", [])
-
     total_ctc = sum(ctc_counts)
     total_wbc = sum(wbc_counts)
 
     selection_paragraph = document.add_paragraph()
-    selection_run = selection_paragraph.add_run("选三张不同荧光同一区域的照片，有方框标出是CTC。")
+    selection_run = selection_paragraph.add_run(
+        selection_text or "选三张不同荧光同一区域的照片，有方框标出是CTC。"
+    )
     _apply_run_style(selection_run, 12, color=RGBColor(55, 65, 81))
 
-    ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
     if ctc_image_sets:
         image_set = ctc_image_sets[0]
 
@@ -423,19 +673,32 @@ def _build_report_document(
             summary_run = summary_paragraph.add_run(summary_text)
             _apply_run_style(summary_run, 10, color=RGBColor(55, 65, 81))
 
-        def _resolve_preview_path(primary_key: str, *fallback_keys: str) -> str | None:
+        def _resolve_preview_path(primary_key: str, *fallback_keys: str) -> Path | None:
             keys = (primary_key,) + fallback_keys
             for key in keys:
                 candidate = image_set.get(key)
-                if candidate and os.path.exists(candidate):
+                if isinstance(candidate, Path) and candidate.exists():
                     return candidate
+                if isinstance(candidate, str):
+                    candidate_path = Path(candidate)
+                    if candidate_path.exists():
+                        return candidate_path
             return None
 
-        labels_and_paths = [
+        labels_and_paths: List[tuple[str, Path | None]] = [
             ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
             ("绿色通道", _resolve_preview_path("green_path", "green_original")),
-            ("红色通道", _resolve_preview_path("red_path", "red_original")),
         ]
+
+        mask_label = "掩膜通道"
+        mask_path: Path | None = None
+        if selected_mask_path and selected_mask_path.exists():
+            mask_path = selected_mask_path
+        else:
+            mask_path = _resolve_preview_path("mask_path", "red_path", "red_original")
+            mask_label = "红色通道"
+
+        labels_and_paths.append((mask_label, mask_path))
 
         image_table = document.add_table(rows=2, cols=3)
         image_table.autofit = True
@@ -463,21 +726,29 @@ def _build_report_document(
         no_image_run = no_image_paragraph.add_run("当前未检测到可用于展示的CTC图像。")
         _apply_run_style(no_image_run, 12, color=RGBColor(107, 114, 128))
 
-    result_text = (
+    computed_result_text = (
         f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
         if doc_names
         else "结果说明：未能识别出有效的检测结果，请检查上传的影像资料。"
     )
+    result_text_to_use = result_text or computed_result_text
     result_paragraph = document.add_paragraph()
-    result_run = result_paragraph.add_run(result_text)
-    _apply_run_style(result_run, 12, color=RGBColor(220, 38, 38) if doc_names else RGBColor(107, 114, 128))
+    result_run = result_paragraph.add_run(result_text_to_use)
+    _apply_run_style(
+        result_run,
+        12,
+        color=RGBColor(220, 38, 38) if doc_names else RGBColor(107, 114, 128),
+    )
 
-    notes_value = (metadata.get("备注") or "").strip()
-    biomarker_text = notes_value if notes_value else "______________"
+    remark_text_to_use = remark_text
+    if not remark_text_to_use:
+        notes_value = (metadata.get("备注") or "").strip()
+        biomarker_text = notes_value if notes_value else "______________"
+        remark_text_to_use = f"备注：生物标记物染色选用{biomarker_text}。"
     remark_paragraph = document.add_paragraph()
-    remark_run = remark_paragraph.add_run(f"备注：生物标记物染色选用{biomarker_text}。")
+    remark_run = remark_paragraph.add_run(remark_text_to_use)
     _apply_run_style(remark_run, 12, color=RGBColor(30, 64, 45))
-    
+
     separator = document.add_paragraph()
     separator_run = separator.add_run("--------------------------------------------------------------------")
     _apply_run_style(separator_run, 12, color=RGBColor(75, 85, 99))
@@ -615,7 +886,10 @@ async def generate_ctc_report(
     medication_details: str = Form("", alias="medicationDetails"),
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
-) -> FileResponse:
+    generate_docx: bool = Form(False, alias="generateDocx"),
+    session_id: str = Form("", alias="sessionId"),
+    selected_mask: str = Form("", alias="selectedMask"),
+) -> JSONResponse:
     uploaded_files = files or []
     logger.info(
         "收到CTC报告生成请求：zip文件=%s，多文件数量=%d，圆度阈值=%.2f",
@@ -624,21 +898,84 @@ async def generate_ctc_report(
         roundness_threshold,
     )
 
-    if (file is None or not file.filename) and not files:
-        raise HTTPException(status_code=400, detail="请上传包含影像数据的ZIP文件或文件夹")
+    # 记录初始参数，便于调试
+    logger.debug(
+        "generate_docx=%s, session_id=%s, selected_mask=%s",
+        generate_docx,
+        session_id,
+        selected_mask,
+    )
 
     work_dir: Path | None = None
     dataset_root: Path | None = None
     output_dir: Path | None = None
+
     try:
+        if generate_docx and session_id:
+            output_dir = _ensure_within_directory(OUTPUT_ROOT / session_id, OUTPUT_ROOT)
+            if not output_dir.exists():
+                raise HTTPException(status_code=404, detail="未找到对应的分析记录，请重新生成报告")
+
+            snapshot = _load_analysis_snapshot(output_dir)
+            metadata_ordered = _ordered_metadata_from_snapshot(snapshot)
+            doc_names = snapshot.get("docNames", []) or []
+            ctc_counts = snapshot.get("ctcCounts", []) or []
+            wbc_counts = snapshot.get("wbcCounts", []) or []
+            channel_summary_texts = snapshot.get("channelSummaryTexts", []) or []
+            result_text = snapshot.get("resultText", "")
+            remark_text = snapshot.get("remarkText", "")
+            selection_text = snapshot.get("selectionText", "")
+
+            resolved_image_sets = _resolve_image_sets(snapshot.get("ctcImageSets", []) or [], output_dir)
+
+            selected_mask_path: Path | None = None
+            if selected_mask:
+                try:
+                    selected_mask_path = _resolve_snapshot_path(selected_mask, output_dir)
+                except HTTPException:
+                    logger.warning("用户选择的掩膜路径无效：%s", selected_mask)
+                    selected_mask_path = None
+
+            report_path = output_dir / "ctc_report.docx"
+            _build_report_document_from_snapshot(
+                metadata_ordered,
+                doc_names,
+                ctc_counts,
+                wbc_counts,
+                resolved_image_sets,
+                report_path,
+                channel_summary_texts=channel_summary_texts,
+                result_text=result_text,
+                remark_text=remark_text,
+                selection_text=selection_text,
+                selected_mask_path=selected_mask_path,
+            )
+
+            report_bytes = report_path.read_bytes()
+            snapshot["selectedMask"] = selected_mask
+            snapshot["lastGeneratedAt"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            _write_analysis_snapshot(output_dir, snapshot)
+
+            response_payload = _build_response_payload(
+                snapshot,
+                output_dir,
+                session_id,
+                datetime.now(timezone.utc),
+                file_bytes=report_bytes,
+            )
+            if work_dir is not None:
+                shutil.rmtree(work_dir, ignore_errors=True)
+            return JSONResponse(content=response_payload)
+
+        if (file is None or not file.filename) and not files:
+            raise HTTPException(status_code=400, detail="请上传包含影像数据的ZIP文件或文件夹")
+
         if file is not None and file.filename:
             if not file.filename.lower().endswith(".zip"):
                 raise HTTPException(status_code=400, detail="请上传ZIP格式的影像压缩包")
-
             contents = await file.read()
             if not contents:
                 raise HTTPException(status_code=400, detail="上传文件内容为空")
-
             work_dir, dataset_root = _prepare_workdir(contents)
             logger.info("已从ZIP文件提取数据，工作目录：%s", work_dir)
         elif files:
@@ -665,81 +1002,17 @@ async def generate_ctc_report(
             medication_details,
             notes,
         )
-        logger.info(
-            "报告元数据：%s",
-            {key: metadata[key] for key in metadata},
-        )
 
-        report_path = output_dir / "ctc_report.docx"
         channel_summary_texts = _format_channel_summary_texts(analyzer)
-        _build_report_document(
-            analyzer,
-            metadata,
-            report_path,
-            channel_summary_texts=channel_summary_texts,
-        )
-        logger.info("报告已生成：%s", report_path)
-
-        report_bytes = report_path.read_bytes()
-        encoded_report = base64.b64encode(report_bytes).decode("ascii")
-
-        metadata_items = [
-            {"label": label, "value": value}
-            for label, value in metadata.items()
-        ]
 
         doc_names = analyzer.results.get("doc_names", [])
         ctc_counts = analyzer.results.get("green_single_channel", [])
         wbc_counts = analyzer.results.get("white_single_channel", [])
-        channel_stats = [
-            {"channel": name, "ctc": ctc, "wbc": wbc}
-            for name, ctc, wbc in zip(doc_names, ctc_counts, wbc_counts)
-        ]
 
         total_ctc = sum(ctc_counts)
         total_wbc = sum(wbc_counts)
 
         selection_text = "选三张不同荧光同一区域的照片，有方框标出是CTC。"
-
-        ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
-        image_set_payload: dict | None = None
-        if ctc_image_sets:
-            first_set = ctc_image_sets[0]
-
-            def _resolve_image(primary_key: str, *fallback_keys: str) -> Path | None:
-                keys = (primary_key,) + fallback_keys
-                for key in keys:
-                    candidate = first_set.get(key)
-                    if candidate:
-                        candidate_path = Path(candidate)
-                        if candidate_path.exists():
-                            return candidate_path
-                return None
-
-            images_payload = []
-            for label, keys in (
-                ("蓝色通道", ("blue_path", "blue_original")),
-                ("绿色通道", ("green_path", "green_original")),
-                ("红色通道", ("red_path", "red_original")),
-            ):
-                image_path = _resolve_image(*keys)
-                if not image_path:
-                    continue
-                encoded_preview = _encode_preview_image(image_path)
-                if not encoded_preview:
-                    continue
-                mime_type, encoded_data = encoded_preview
-                images_payload.append(
-                    {
-                        "label": label,
-                        "mimeType": mime_type or "image/png",
-                        "data": encoded_data,
-                    }
-                )
-
-            if images_payload:
-                image_set_payload = {"items": images_payload}
-
         result_text = (
             f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
             if doc_names
@@ -750,26 +1023,57 @@ async def generate_ctc_report(
         biomarker_text = notes_value if notes_value else "______________"
         remark_text = f"备注：生物标记物染色选用{biomarker_text}。"
 
-        response_payload = {
-            "fileName": "ctc_report.docx",
-            "fileContent": encoded_report,
-            "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "metadata": metadata_items,
-            "channels": channel_stats,
-            "totals": {
-                "totalCtc": total_ctc,
-                "totalWbc": total_wbc,
-            },
-            "resultText": result_text,
-            "remarkText": remark_text,
-            "selectionText": selection_text,
-            "hasCtcImages": bool(image_set_payload),
-            "imageSet": image_set_payload,
-            "channelSummaryTexts": channel_summary_texts,
-            "warnings": [],
-        }
+        snapshot = _create_analysis_snapshot(
+            output_dir,
+            metadata,
+            analyzer,
+            channel_summary_texts,
+            result_text,
+            remark_text,
+            selection_text,
+        )
 
-        shutil.rmtree(work_dir, ignore_errors=True)
+        _write_analysis_snapshot(output_dir, snapshot)
+
+        report_bytes: bytes | None = None
+        if generate_docx:
+            resolved_image_sets = _resolve_image_sets(snapshot.get("ctcImageSets", []) or [], output_dir)
+            selected_mask_path: Path | None = None
+            if selected_mask:
+                try:
+                    selected_mask_path = _resolve_snapshot_path(selected_mask, output_dir)
+                except HTTPException:
+                    logger.warning("用户选择的掩膜路径无效：%s", selected_mask)
+                    selected_mask_path = None
+
+            report_path = output_dir / "ctc_report.docx"
+            _build_report_document_from_snapshot(
+                metadata,
+                snapshot.get("docNames", []) or [],
+                snapshot.get("ctcCounts", []) or [],
+                snapshot.get("wbcCounts", []) or [],
+                resolved_image_sets,
+                report_path,
+                channel_summary_texts=channel_summary_texts,
+                result_text=result_text,
+                remark_text=remark_text,
+                selection_text=selection_text,
+                selected_mask_path=selected_mask_path,
+            )
+            report_bytes = report_path.read_bytes()
+            snapshot["selectedMask"] = selected_mask
+            snapshot["lastGeneratedAt"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            _write_analysis_snapshot(output_dir, snapshot)
+
+        response_payload = _build_response_payload(
+            snapshot,
+            output_dir,
+            output_dir.name,
+            datetime.now(timezone.utc),
+            file_bytes=report_bytes,
+        )
+        if work_dir is not None:
+            shutil.rmtree(work_dir, ignore_errors=True)
         return JSONResponse(content=response_payload)
     except zipfile.BadZipFile as exc:
         if work_dir is not None:

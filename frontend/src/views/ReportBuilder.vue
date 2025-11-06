@@ -101,6 +101,41 @@
         </el-form>
       </el-card>
 
+      <el-card v-if="maskOptionGroups.length" shadow="hover" class="mask-card">
+        <template #header>
+          <div class="card-title">掩膜图像选择</div>
+        </template>
+        <div class="mask-card-content">
+          <p class="mask-description">
+            请选择一张带有 <code>mask</code> 后缀的图像，将其填入 Word 报告的第三通道（掩膜通道）。
+          </p>
+          <el-radio-group v-model="selectedMaskPath" class="mask-radio-group">
+            <div
+              v-for="group in maskOptionGroups"
+              :key="group.channel"
+              class="mask-group"
+            >
+              <h4 class="mask-group-title">通道 {{ group.channel }}</h4>
+              <div class="mask-items">
+                <el-radio
+                  v-for="item in group.items"
+                  :key="item.relativePath"
+                  :label="item.relativePath"
+                  class="mask-radio-option"
+                >
+                  <img
+                    class="mask-preview"
+                    :src="`data:${item.mimeType};base64,${item.data}`"
+                    :alt="`${item.label} 预览图`"
+                  />
+                  <span class="mask-item-label">{{ item.label }}</span>
+                </el-radio>
+              </div>
+            </div>
+          </el-radio-group>
+        </div>
+      </el-card>
+
       <el-card shadow="hover" class="preview-card">
         <template #header>
           <div class="card-title">报告预览</div>
@@ -176,7 +211,12 @@
             </el-alert>
           </div>
           <div class="preview-actions">
-            <el-button type="success" :disabled="!canDownloadReport" @click="downloadDocx">
+            <el-button
+              type="success"
+              :disabled="!canDownloadReport || isExporting"
+              :loading="isExporting"
+              @click="downloadDocx"
+            >
               导出 Word 报告
             </el-button>
             <el-button :disabled="!hasReport" @click="resetAll">重置内容</el-button>
@@ -238,12 +278,17 @@ const folderFileCount = ref(0)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const isDetecting = ref(false)
+const isExporting = ref(false)
 const reportData = ref<CtcReportResponse | null>(null)
 const generatedReportBlob = ref<Blob | null>(null)
 const generatedReportUrl = ref('')
 const previewError = ref('')
 const previewWarnings = ref<string[]>([])
 const isPreviewLoading = ref(false)
+const currentSessionId = ref('')
+const selectedMaskPath = ref('')
+const lastExportedMask = ref('')
+const lastExportedSessionId = ref('')
 
 const heartbeatIntervalMs = 5000
 let heartbeatTimer: number | null = null
@@ -253,7 +298,9 @@ let heartbeatDisconnectNotified = false
 const roundnessThreshold = ref(0.3)
 
 const hasReport = computed(() => Boolean(reportData.value))
-const canDownloadReport = computed(() => Boolean(generatedReportBlob.value))
+const canDownloadReport = computed(
+  () => Boolean(reportData.value && currentSessionId.value)
+)
 
 const sanitizeText = (value: string | null | undefined) => {
   if (!value) {
@@ -380,6 +427,32 @@ const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
     }))
 })
 
+const maskOptionGroups = computed(() =>
+  (reportData.value?.maskOptions ?? []).filter(group => group.items?.length)
+)
+const availableMaskItems = computed(() =>
+  maskOptionGroups.value.flatMap(group =>
+    (group.items ?? []).map(item => ({
+      ...item,
+      channel: group.channel
+    }))
+  )
+)
+
+watch(
+  availableMaskItems,
+  items => {
+    if (!items.length) {
+      selectedMaskPath.value = ''
+      return
+    }
+    if (!selectedMaskPath.value || !items.some(item => item.relativePath === selectedMaskPath.value)) {
+      selectedMaskPath.value = items[0].relativePath
+    }
+  },
+  { immediate: true }
+)
+
 const expectedChannels = ['1', '2', '3', '4', '5']
 
 const revokeObjectUrl = (url: string) => {
@@ -392,6 +465,7 @@ const resetPreview = () => {
   reportData.value = null
   previewError.value = ''
   previewWarnings.value = []
+  selectedMaskPath.value = ''
 }
 
 const resetSelectedFolder = () => {
@@ -404,6 +478,10 @@ const resetSelectedFolder = () => {
     generatedReportUrl.value = ''
   }
   generatedReportBlob.value = null
+  currentSessionId.value = ''
+  lastExportedMask.value = ''
+  lastExportedSessionId.value = ''
+  isExporting.value = false
 }
 
 const base64ToBlob = (base64: string, mimeType: string) => {
@@ -509,6 +587,10 @@ const runDetection = async () => {
   }
   generatedReportBlob.value = null
   reportData.value = null
+  currentSessionId.value = ''
+  selectedMaskPath.value = ''
+  lastExportedMask.value = ''
+  lastExportedSessionId.value = ''
 
   try {
     console.info('[Report] 开始请求后端生成报告', {
@@ -530,13 +612,17 @@ const runDetection = async () => {
         medicationDetails: form.medicationDetails,
         notes: form.notes
       },
-      roundnessThreshold: roundnessThreshold.value
+      roundnessThreshold: roundnessThreshold.value,
+      generateDocx: false
     })
 
-    applyReportBlob(response)
+    if (response.fileContent) {
+      applyReportBlob(response)
+    }
     reportData.value = response
+    currentSessionId.value = response.sessionId ?? ''
     previewWarnings.value = response.warnings ?? []
-    ElMessage.success('报告生成成功，预览已同步更新')
+    ElMessage.success('影像分析完成，请选择掩膜后导出 Word 报告')
   } catch (error) {
     previewError.value = '报告生成失败，请稍后重试。'
     if (isAxiosError(error)) {
@@ -570,9 +656,83 @@ const runDetection = async () => {
   }
 }
 
-const downloadDocx = () => {
-  if (!generatedReportBlob.value || !generatedReportUrl.value) {
+const downloadDocx = async () => {
+  if (!reportData.value || !currentSessionId.value) {
     ElMessage.warning('请先生成报告后再导出 Word 文件')
+    return
+  }
+
+  const hasMaskChoices = availableMaskItems.value.length > 0
+
+  if (hasMaskChoices && !selectedMaskPath.value) {
+    ElMessage.warning('请选择要插入 Word 报告的掩膜图像')
+    return
+  }
+
+  if (isExporting.value) {
+    return
+  }
+
+  const needsRegeneration =
+    !generatedReportBlob.value ||
+    !generatedReportUrl.value ||
+    lastExportedMask.value !== selectedMaskPath.value ||
+    lastExportedSessionId.value !== currentSessionId.value
+
+  if (needsRegeneration) {
+    try {
+      isExporting.value = true
+      const response = await postGenerateCtcReport({
+        form: {
+          petName: form.petName,
+          ownerName: form.ownerName,
+          age: form.age,
+          gender: form.gender,
+          sampleType: form.sampleType,
+          medicationIntake: form.medicationIntake,
+          medicationDetails: form.medicationDetails,
+          notes: form.notes
+        },
+        roundnessThreshold: roundnessThreshold.value,
+        generateDocx: true,
+        sessionId: currentSessionId.value,
+        selectedMask: hasMaskChoices ? selectedMaskPath.value : ''
+      })
+
+      if (!response.fileContent) {
+        throw new Error('后端未返回有效的 Word 文件内容')
+      }
+
+      applyReportBlob(response)
+      reportData.value = response
+      currentSessionId.value = response.sessionId ?? currentSessionId.value
+      previewWarnings.value = response.warnings ?? []
+      lastExportedMask.value = hasMaskChoices ? selectedMaskPath.value : ''
+      lastExportedSessionId.value = currentSessionId.value
+      ElMessage.success('Word 报告已生成，可下载')
+    } catch (error) {
+      console.error('[Report] 导出 Word 失败', error)
+      if (isAxiosError(error)) {
+        if (error.code === 'ERR_NETWORK') {
+          ElMessage.error('无法连接后端服务，请检查网络或后端状态')
+        } else if (error.code === 'ECONNABORTED') {
+          ElMessage.error('导出 Word 超时，请稍后重试')
+        } else {
+          ElMessage.error(error.message || '导出 Word 失败，请稍后重试')
+        }
+      } else if (error instanceof Error) {
+        ElMessage.error(error.message || '导出 Word 失败，请稍后重试')
+      } else {
+        ElMessage.error('导出 Word 失败，请稍后重试')
+      }
+      return
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  if (!generatedReportBlob.value || !generatedReportUrl.value) {
+    ElMessage.error('导出 Word 失败，请稍后重试')
     return
   }
 
@@ -701,6 +861,110 @@ onBeforeUnmount(() => {
   font-size: 18px;
   font-weight: 600;
   color: #1f2937;
+}
+
+.mask-card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.mask-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mask-description {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.mask-description code {
+  background-color: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.mask-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mask-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mask-group-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.mask-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.mask-radio-option {
+  --el-radio-font-size: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.24);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(219, 234, 254, 0.8) 100%);
+  width: 160px;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+
+.mask-radio-option:is(:hover, .is-focus) {
+  border-color: rgba(37, 99, 235, 0.6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.mask-radio-option.is-checked {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  background: linear-gradient(180deg, rgba(224, 231, 255, 0.95) 0%, rgba(191, 219, 254, 0.85) 100%);
+}
+
+.mask-radio-option :deep(.el-radio__input) {
+  display: none;
+}
+
+.mask-radio-option :deep(.el-radio__label) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+}
+
+.mask-preview {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.25);
+  background: #fff;
+}
+
+.mask-item-label {
+  font-size: 12px;
+  color: #1f2937;
+  text-align: center;
+  word-break: break-all;
 }
 
 .info-form {
