@@ -616,7 +616,19 @@ verify_startup_token()
 
 APP_START_TIME = time.time()
 
-OUTPUT_ROOT = Path(__file__).resolve().parents[1] / "var"
+def _determine_output_root() -> Path:
+    """Return a writable directory for generated artifacts."""
+    if getattr(sys, "frozen", False):
+        base_dir = Path(sys.executable).resolve().parent
+    else:
+        base_dir = Path(__file__).resolve().parents[1]
+
+    output_root = base_dir / "var"
+    output_root.mkdir(parents=True, exist_ok=True)
+    return output_root
+
+
+OUTPUT_ROOT = _determine_output_root()
 
 app = FastAPI()
 
