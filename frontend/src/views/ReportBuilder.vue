@@ -106,7 +106,7 @@
           <div class="card-title">掩码图像选择</div>
         </template>
         <div class="mask-selection">
-          <p class="mask-instruction">请选择需要插入 Word 报告第三通道的掩码图像。</p>
+          <p class="mask-instruction">请选择需要插入 Word 报告的三个通道掩码图像。</p>
           <div v-if="isPreviewLoading" class="mask-loading">
             <el-skeleton :rows="3" animated />
           </div>
