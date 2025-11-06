@@ -30,6 +30,7 @@ if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
     )
 
 import base64
+import json
 import shutil
 import io
 import mimetypes
@@ -39,6 +40,7 @@ import zipfile
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable, List
 
 from docx import Document
@@ -49,7 +51,7 @@ from docx.shared import Pt, RGBColor, Inches
 import cv2
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse,JSONResponse
+from fastapi.responses import JSONResponse
 
 try:
     from .ctc import CTCAnalyzer
@@ -354,6 +356,7 @@ def _build_report_document(
     metadata: OrderedDict[str, str],
     output_path: Path,
     channel_summary_texts: list[str] | None = None,
+    mask_option: dict | None = None,
 ) -> None:
     document = Document()
     logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
@@ -431,11 +434,27 @@ def _build_report_document(
                     return candidate
             return None
 
+        mask_override_path: str | None = None
+        mask_override_label: str | None = None
+        if mask_option:
+            candidate_path = mask_option.get("path")
+            if candidate_path and os.path.exists(candidate_path):
+                mask_override_path = candidate_path
+                mask_override_label = mask_option.get("label")
+            else:
+                logger.warning("指定的掩码图像不存在或不可访问：%s", candidate_path)
+
         labels_and_paths = [
             ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
             ("绿色通道", _resolve_preview_path("green_path", "green_original")),
             ("红色通道", _resolve_preview_path("red_path", "red_original")),
         ]
+
+        if mask_override_path:
+            labels_and_paths[2] = (
+                mask_override_label or "掩码图像",
+                mask_override_path,
+            )
 
         image_table = document.add_table(rows=2, cols=3)
         image_table.autofit = True
@@ -615,8 +634,10 @@ async def generate_ctc_report(
     medication_details: str = Form("", alias="medicationDetails"),
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
-) -> FileResponse:
+    preview_only: str = Form("false", alias="previewOnly"),
+) -> JSONResponse:
     uploaded_files = files or []
+    preview_only_flag = str(preview_only).lower() in {"1", "true", "yes", "on"}
     logger.info(
         "收到CTC报告生成请求：zip文件=%s，多文件数量=%d，圆度阈值=%.2f",
         bool(file and file.filename),
@@ -672,21 +693,6 @@ async def generate_ctc_report(
 
         report_path = output_dir / "ctc_report.docx"
         channel_summary_texts = _format_channel_summary_texts(analyzer)
-        _build_report_document(
-            analyzer,
-            metadata,
-            report_path,
-            channel_summary_texts=channel_summary_texts,
-        )
-        logger.info("报告已生成：%s", report_path)
-
-        report_bytes = report_path.read_bytes()
-        encoded_report = base64.b64encode(report_bytes).decode("ascii")
-
-        metadata_items = [
-            {"label": label, "value": value}
-            for label, value in metadata.items()
-        ]
 
         doc_names = analyzer.results.get("doc_names", [])
         ctc_counts = analyzer.results.get("green_single_channel", [])
@@ -700,6 +706,38 @@ async def generate_ctc_report(
         total_wbc = sum(wbc_counts)
 
         selection_text = "选三张不同荧光同一区域的照片，有方框标出是CTC。"
+
+        mask_options_payload: list[dict] = []
+        mask_paths_map = analyzer.results.get("mask_paths", {}) or {}
+        for channel, mask_paths in mask_paths_map.items():
+            for index, mask_path in enumerate(mask_paths):
+                mask_path_obj = Path(mask_path)
+                if not mask_path_obj.exists():
+                    continue
+                try:
+                    relative_path = mask_path_obj.relative_to(output_dir)
+                except ValueError:
+                    relative_path = Path(mask_path_obj.name)
+                encoded_preview = _encode_preview_image(mask_path_obj)
+                if not encoded_preview:
+                    continue
+                mime_type, encoded_data = encoded_preview
+                option_id = f"{channel}-{mask_path_obj.stem}-{index}"
+                option_label = (
+                    f"{channel}通道掩码"
+                    if len(mask_paths) == 1
+                    else f"{channel}通道掩码 {index + 1}"
+                )
+                mask_options_payload.append(
+                    {
+                        "id": option_id,
+                        "channel": str(channel),
+                        "label": option_label,
+                        "relativePath": str(relative_path).replace(os.sep, "/"),
+                        "mimeType": mime_type or "image/png",
+                        "data": encoded_data,
+                    }
+                )
 
         ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
         image_set_payload: dict | None = None
@@ -750,9 +788,37 @@ async def generate_ctc_report(
         biomarker_text = notes_value if notes_value else "______________"
         remark_text = f"备注：生物标记物染色选用{biomarker_text}。"
 
+        metadata_items = [
+            {"label": label, "value": value}
+            for label, value in metadata.items()
+        ]
+
+        report_token = output_dir.name
+        state_payload = {
+            "metadata": {key: metadata[key] for key in metadata},
+            "results": analyzer.results,
+            "channelSummaryTexts": channel_summary_texts,
+            "selectionText": selection_text,
+            "resultText": result_text,
+            "remarkText": remark_text,
+            "maskOptions": [
+                {
+                    "id": option["id"],
+                    "channel": option["channel"],
+                    "label": option["label"],
+                    "relativePath": option["relativePath"],
+                }
+                for option in mask_options_payload
+            ],
+            "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        (output_dir / "report_state.json").write_text(
+            json.dumps(state_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
         response_payload = {
             "fileName": "ctc_report.docx",
-            "fileContent": encoded_report,
             "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "metadata": metadata_items,
             "channels": channel_stats,
@@ -767,7 +833,21 @@ async def generate_ctc_report(
             "imageSet": image_set_payload,
             "channelSummaryTexts": channel_summary_texts,
             "warnings": [],
+            "reportToken": report_token,
+            "maskOptions": mask_options_payload,
         }
+
+        if not preview_only_flag:
+            _build_report_document(
+                analyzer,
+                metadata,
+                report_path,
+                channel_summary_texts=channel_summary_texts,
+            )
+            logger.info("报告已生成：%s", report_path)
+            report_bytes = report_path.read_bytes()
+            encoded_report = base64.b64encode(report_bytes).decode("ascii")
+            response_payload["fileContent"] = encoded_report
 
         shutil.rmtree(work_dir, ignore_errors=True)
         return JSONResponse(content=response_payload)
@@ -796,6 +876,95 @@ async def generate_ctc_report(
         if files:
             for upload in files:
                 await upload.close()
+
+
+@app.post("/ctc/report/export")
+async def export_ctc_report(
+    report_token: str = Form(..., alias="reportToken"),
+    mask_option_id: str = Form("", alias="maskOptionId"),
+) -> JSONResponse:
+    logger.info(
+        "收到报告导出请求：report_token=%s, mask_option_id=%s",
+        report_token,
+        mask_option_id,
+    )
+
+    if not report_token:
+        raise HTTPException(status_code=400, detail="缺少报告标识")
+
+    output_root = OUTPUT_ROOT.resolve()
+    output_dir = (output_root / report_token).resolve()
+    try:
+        output_dir.relative_to(output_root)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="报告标识无效") from exc
+
+    if not output_dir.exists():
+        raise HTTPException(status_code=404, detail="报告数据不存在")
+
+    state_path = output_dir / "report_state.json"
+    if not state_path.exists():
+        raise HTTPException(status_code=400, detail="报告状态文件不存在")
+
+    try:
+        state_data = json.loads(state_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        logger.exception("报告状态文件解析失败：%s", state_path)
+        raise HTTPException(status_code=500, detail="报告状态文件已损坏") from exc
+
+    metadata_dict = state_data.get("metadata") or {}
+    metadata = OrderedDict((key, metadata_dict[key]) for key in metadata_dict)
+    results = state_data.get("results") or {}
+    channel_summary_texts = state_data.get("channelSummaryTexts") or []
+    mask_options_state = state_data.get("maskOptions") or []
+
+    mask_option_payload: dict | None = None
+    if mask_option_id:
+        option = next((item for item in mask_options_state if item.get("id") == mask_option_id), None)
+        if option is None:
+            raise HTTPException(status_code=400, detail="所选掩码图像不存在")
+
+        relative_path = option.get("relativePath")
+        if not relative_path:
+            raise HTTPException(status_code=400, detail="所选掩码图像路径无效")
+
+        mask_path = (output_dir / relative_path).resolve()
+        try:
+            mask_path.relative_to(output_dir)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="掩码图像路径无效") from exc
+
+        if not mask_path.exists():
+            raise HTTPException(status_code=400, detail="所选掩码图像文件不存在")
+
+        mask_option_payload = {
+            "path": str(mask_path),
+            "label": option.get("label") or f"{option.get('channel', '')}通道掩码",
+        }
+
+    analyzer_stub = SimpleNamespace(results=results)
+    report_path = output_dir / "ctc_report.docx"
+
+    _build_report_document(
+        analyzer_stub,  # type: ignore[arg-type]
+        metadata,
+        report_path,
+        channel_summary_texts=channel_summary_texts,
+        mask_option=mask_option_payload,
+    )
+    logger.info("报告文档已生成：%s", report_path)
+
+    report_bytes = report_path.read_bytes()
+    encoded_report = base64.b64encode(report_bytes).decode("ascii")
+
+    return JSONResponse(
+        content={
+            "fileName": "ctc_report.docx",
+            "fileContent": encoded_report,
+            "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "reportToken": report_token,
+        }
+    )
 
 
 if __name__ == "__main__":
