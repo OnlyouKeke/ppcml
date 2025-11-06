@@ -25,9 +25,18 @@ export interface ReportImageSet {
   items: ReportImageItem[]
 }
 
+export interface ReportMaskOption {
+  id: string
+  channel: string
+  label: string
+  relativePath: string
+  mimeType: string
+  data: string
+}
+
 export interface CtcReportResponse {
   fileName: string
-  fileContent: string
+  fileContent?: string
   generatedAt: string
   metadata: ReportMetadataItem[]
   channels: ReportChannelStat[]
@@ -42,4 +51,13 @@ export interface CtcReportResponse {
   imageSet?: ReportImageSet | null
   channelSummaryTexts?: string[]
   warnings?: string[]
+  reportToken?: string
+  maskOptions?: ReportMaskOption[]
+}
+
+export interface CtcReportDocxResponse {
+  fileName: string
+  fileContent: string
+  generatedAt: string
+  reportToken?: string
 }
