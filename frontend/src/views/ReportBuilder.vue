@@ -101,6 +101,57 @@
         </el-form>
       </el-card>
 
+      <el-card shadow="hover" class="mask-card">
+        <template #header>
+          <div class="card-title">掩码图像选择</div>
+        </template>
+        <div class="mask-selection">
+          <p class="mask-instruction">请选择需要插入 Word 报告第三通道的掩码图像。</p>
+          <div v-if="isPreviewLoading" class="mask-loading">
+            <el-skeleton :rows="3" animated />
+          </div>
+          <div v-else-if="!reportToken" class="mask-placeholder">
+            生成报告预览后，将在此展示带有 <code>mask</code> 后缀的图像供选择。
+          </div>
+          <el-empty
+            v-else-if="!maskOptions.length"
+            description="当前未检测到可用的掩码图像"
+            :image-size="100"
+            class="mask-empty"
+          />
+          <div v-else class="mask-options-wrapper">
+            <el-radio-group v-model="selectedMaskOptionId" class="mask-option-group">
+              <el-radio
+                v-for="option in maskOptions"
+                :key="option.id"
+                :label="option.id"
+                class="mask-option-radio"
+              >
+                {{ option.label }}
+              </el-radio>
+            </el-radio-group>
+            <div class="mask-preview-grid">
+              <div
+                v-for="option in maskOptions"
+                :key="`preview-${option.id}`"
+                :class="['mask-preview-item', { active: option.id === selectedMaskOptionId }]"
+                @click="selectedMaskOptionId = option.id"
+              >
+                <img
+                  :src="`data:${option.mimeType};base64,${option.data}`"
+                  :alt="option.label"
+                  class="mask-preview-image"
+                />
+                <div class="mask-preview-label">{{ option.label }}</div>
+              </div>
+            </div>
+            <div v-if="selectedMaskOption" class="mask-selected-tip">
+              已选择：{{ selectedMaskOption.label }}
+            </div>
+          </div>
+        </div>
+      </el-card>
+
       <el-card shadow="hover" class="preview-card">
         <template #header>
           <div class="card-title">报告预览</div>
@@ -176,8 +227,13 @@
             </el-alert>
           </div>
           <div class="preview-actions">
-            <el-button type="success" :disabled="!canDownloadReport" @click="downloadDocx">
-              导出 Word 报告
+            <el-button
+              type="success"
+              :disabled="!canDownloadReport || isExporting"
+              :loading="isExporting"
+              @click="downloadDocx"
+            >
+              {{ isExporting ? '生成中...' : '导出 Word 报告' }}
             </el-button>
             <el-button :disabled="!hasReport" @click="resetAll">重置内容</el-button>
           </div>
@@ -191,8 +247,13 @@
 import { ElMessage } from 'element-plus'
 import { isAxiosError } from 'axios'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { getHeartbeat, postGenerateCtcReport } from '../api/api'
-import type { CtcReportResponse, ReportMetadataItem } from '../types/api'
+import { getHeartbeat, postExportCtcReport, postGenerateCtcReport } from '../api/api'
+import type {
+  CtcReportDocxResponse,
+  CtcReportResponse,
+  ReportMaskOption,
+  ReportMetadataItem
+} from '../types/api'
 
 interface ChannelPreviewItem {
   label: string
@@ -241,9 +302,13 @@ const isDetecting = ref(false)
 const reportData = ref<CtcReportResponse | null>(null)
 const generatedReportBlob = ref<Blob | null>(null)
 const generatedReportUrl = ref('')
+const reportToken = ref('')
+const maskOptions = ref<ReportMaskOption[]>([])
+const selectedMaskOptionId = ref('')
 const previewError = ref('')
 const previewWarnings = ref<string[]>([])
 const isPreviewLoading = ref(false)
+const isExporting = ref(false)
 
 const heartbeatIntervalMs = 5000
 let heartbeatTimer: number | null = null
@@ -253,7 +318,10 @@ let heartbeatDisconnectNotified = false
 const roundnessThreshold = ref(0.3)
 
 const hasReport = computed(() => Boolean(reportData.value))
-const canDownloadReport = computed(() => Boolean(generatedReportBlob.value))
+const canDownloadReport = computed(() => Boolean(reportToken.value))
+const selectedMaskOption = computed(() =>
+  maskOptions.value.find(option => option.id === selectedMaskOptionId.value) ?? null
+)
 
 const sanitizeText = (value: string | null | undefined) => {
   if (!value) {
@@ -392,6 +460,10 @@ const resetPreview = () => {
   reportData.value = null
   previewError.value = ''
   previewWarnings.value = []
+  reportToken.value = ''
+  maskOptions.value = []
+  selectedMaskOptionId.value = ''
+  isExporting.value = false
 }
 
 const resetSelectedFolder = () => {
@@ -416,7 +488,10 @@ const base64ToBlob = (base64: string, mimeType: string) => {
   return new Blob([bytes], { type: mimeType })
 }
 
-const applyReportBlob = (data: CtcReportResponse) => {
+const applyReportBlob = (data: { fileContent?: string } | CtcReportDocxResponse) => {
+  if (!data.fileContent) {
+    return
+  }
   const blob = base64ToBlob(
     data.fileContent,
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -508,6 +583,9 @@ const runDetection = async () => {
     generatedReportUrl.value = ''
   }
   generatedReportBlob.value = null
+  reportToken.value = ''
+  maskOptions.value = []
+  selectedMaskOptionId.value = ''
   reportData.value = null
 
   try {
@@ -530,11 +608,14 @@ const runDetection = async () => {
         medicationDetails: form.medicationDetails,
         notes: form.notes
       },
-      roundnessThreshold: roundnessThreshold.value
+      roundnessThreshold: roundnessThreshold.value,
+      previewOnly: true
     })
 
-    applyReportBlob(response)
     reportData.value = response
+    reportToken.value = response.reportToken ?? ''
+    maskOptions.value = response.maskOptions ?? []
+    selectedMaskOptionId.value = maskOptions.value[0]?.id ?? ''
     previewWarnings.value = response.warnings ?? []
     ElMessage.success('报告生成成功，预览已同步更新')
   } catch (error) {
@@ -570,19 +651,55 @@ const runDetection = async () => {
   }
 }
 
-const downloadDocx = () => {
-  if (!generatedReportBlob.value || !generatedReportUrl.value) {
-    ElMessage.warning('请先生成报告后再导出 Word 文件')
+const downloadDocx = async () => {
+  if (!reportToken.value) {
+    ElMessage.warning('请先生成预览，再导出 Word 文件')
     return
   }
 
-  const downloadName = `${selectedFolderName.value || 'ctc_dataset'}-report.docx`
-  const link = document.createElement('a')
-  link.href = generatedReportUrl.value
-  link.download = downloadName
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  if (maskOptions.value.length && !selectedMaskOptionId.value) {
+    ElMessage.warning('请选择要插入的掩码图像')
+    return
+  }
+
+  try {
+    isExporting.value = true
+    const response = await postExportCtcReport({
+      reportToken: reportToken.value,
+      maskOptionId: selectedMaskOptionId.value || undefined
+    })
+
+    applyReportBlob(response)
+    reportToken.value = response.reportToken ?? reportToken.value
+
+    if (!generatedReportBlob.value || !generatedReportUrl.value) {
+      ElMessage.error('导出 Word 文件失败，请稍后重试')
+      return
+    }
+
+    const downloadName = `${selectedFolderName.value || 'ctc_dataset'}-report.docx`
+    const link = document.createElement('a')
+    link.href = generatedReportUrl.value
+    link.download = downloadName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    ElMessage.success('Word 报告已生成并开始下载')
+  } catch (error) {
+    if (isAxiosError(error)) {
+      console.error('[Report] 导出 Word 报告失败', error)
+      if (error.code === 'ERR_NETWORK') {
+        ElMessage.error('无法连接后端服务，导出失败')
+      } else {
+        ElMessage.error('导出 Word 报告失败，请稍后重试')
+      }
+    } else {
+      console.error('[Report] 导出 Word 报告时出现异常', error)
+      ElMessage.error('导出 Word 报告失败，请稍后重试')
+    }
+  } finally {
+    isExporting.value = false
+  }
 }
 
 const resetAll = () => {
@@ -692,6 +809,7 @@ onBeforeUnmount(() => {
 }
 
 .form-card,
+.mask-card,
 .preview-card {
   border-radius: 16px;
   overflow: hidden;
@@ -742,6 +860,101 @@ onBeforeUnmount(() => {
 .upload-tip {
   font-size: 13px;
   color: #9ca3af;
+}
+
+.mask-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mask-instruction {
+  margin: 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.mask-loading {
+  padding: 8px 0 4px;
+}
+
+.mask-placeholder {
+  font-size: 13px;
+  color: #6b7280;
+  background: rgba(243, 244, 246, 0.9);
+  border-radius: 12px;
+  padding: 14px 16px;
+  line-height: 1.6;
+}
+
+.mask-options-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mask-option-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.mask-option-radio {
+  margin-right: 0;
+}
+
+.mask-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.mask-preview-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(226, 232, 240, 0.75) 100%);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.mask-preview-item:hover {
+  border-color: #6366f1;
+  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.18);
+  transform: translateY(-2px);
+}
+
+.mask-preview-item.active {
+  border-color: #4f46e5;
+  box-shadow: 0 16px 28px rgba(79, 70, 229, 0.25);
+}
+
+.mask-preview-image {
+  width: 100%;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.22);
+}
+
+.mask-preview-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a8a;
+  text-align: center;
+}
+
+.mask-selected-tip {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.mask-empty {
+  padding: 18px 0;
 }
 
 .preview-wrapper {

@@ -43,7 +43,8 @@ class CTCAnalyzer:
             'file_names': [],
             'all_areas': [],
             'roundness_values': [],
-            'ctc_image_sets': []
+            'ctc_image_sets': [],
+            'mask_paths': {}
         }
 
     def compute_roundness(self, label_image: np.ndarray) -> Tuple[List, List]:
@@ -337,7 +338,7 @@ class CTCAnalyzer:
                                     enhanced_red_with_boxes, bounding_rect, 'wbc')
 
         # 保存增强后的结果图像（带框选）
-        blue_save_path, green_save_path, red_save_path, _ = self._save_results(
+        blue_save_path, green_save_path, red_save_path, mask_save_path = self._save_results(
             enhanced_blue_with_boxes,
             enhanced_green_with_boxes,
             enhanced_red_with_boxes,
@@ -347,6 +348,8 @@ class CTCAnalyzer:
             green_file,
             red_file
         )
+
+        self.results['mask_paths'].setdefault(sub_folder, []).append(mask_save_path)
 
         if found_ctc:
             ctc_blue_path, ctc_green_path, ctc_red_path = self._save_ctc_highlights(
@@ -365,7 +368,8 @@ class CTCAnalyzer:
                 'red_path': ctc_red_path,
                 'blue_original': blue_save_path,
                 'green_original': green_save_path,
-                'red_original': red_save_path
+                'red_original': red_save_path,
+                'mask_path': mask_save_path
             })
 
         return ctc_count, wbc_count

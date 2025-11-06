@@ -1,5 +1,5 @@
 import axios, { isAxiosError } from 'axios'
-import type { CtcReportResponse, HeartbeatResponse } from '../types/api'
+import type { CtcReportDocxResponse, CtcReportResponse, HeartbeatResponse } from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -108,12 +108,14 @@ interface CtcReportPayload {
     medicationDetails?: string
   }
   roundnessThreshold?: number
+  previewOnly?: boolean
 }
 
 export const postGenerateCtcReport = async ({
   files,
   form,
-  roundnessThreshold = 0.3
+  roundnessThreshold = 0.3,
+  previewOnly = false
 }: CtcReportPayload): Promise<CtcReportResponse> => {
   const formData = new FormData()
   console.debug('[API] Preparing CTC report request', {
@@ -122,7 +124,8 @@ export const postGenerateCtcReport = async ({
       (file as FileWithRelativePath).webkitRelativePath || file.name
     ),
     form,
-    roundnessThreshold
+    roundnessThreshold,
+    previewOnly
   })
   files.forEach(file => {
     const relativePath = (file as FileWithRelativePath).webkitRelativePath || file.name
@@ -138,6 +141,7 @@ export const postGenerateCtcReport = async ({
   formData.append('medicationIntake', form.medicationIntake || '')
   formData.append('medicationDetails', form.medicationDetails || '')
   formData.append('roundnessThreshold', String(roundnessThreshold))
+  formData.append('previewOnly', previewOnly ? 'true' : 'false')
 
   try {
     const response = (await api.post<CtcReportResponse>('/ctc/report', formData, {
@@ -174,6 +178,58 @@ export const postGenerateCtcReport = async ({
       }
     } else {
       console.error('[API] CTC report request failed with unexpected error', error)
+    }
+    throw error
+  }
+}
+
+interface ExportReportPayload {
+  reportToken: string
+  maskOptionId?: string
+}
+
+export const postExportCtcReport = async ({
+  reportToken,
+  maskOptionId
+}: ExportReportPayload): Promise<CtcReportDocxResponse> => {
+  const formData = new FormData()
+  formData.append('reportToken', reportToken)
+  formData.append('maskOptionId', maskOptionId ?? '')
+
+  try {
+    const response = (await api.post<CtcReportDocxResponse>('/ctc/report/export', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      timeout: 9000000
+    })) as unknown as CtcReportDocxResponse
+
+    console.debug('[API] Received CTC report export response', {
+      hasFile: Boolean(response.fileContent)
+    })
+
+    return response
+  } catch (error) {
+    if (isAxiosError(error)) {
+      console.error('[API] CTC report export failed with Axios error', {
+        message: error.message,
+        code: error.code,
+        config: {
+          baseURL: error.config?.baseURL,
+          url: error.config?.url,
+          method: error.config?.method
+        }
+      })
+      if (error.request) {
+        console.error('[API] Axios request details', {
+          readyState: error.request.readyState,
+          status: error.request.status,
+          statusText: error.request.statusText,
+          responseURL: error.request.responseURL
+        })
+      }
+    } else {
+      console.error('[API] Unexpected error when exporting CTC report', error)
     }
     throw error
   }
