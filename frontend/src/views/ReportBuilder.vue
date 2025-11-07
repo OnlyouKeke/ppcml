@@ -692,7 +692,7 @@ const runDetection = async () => {
     if (isAxiosError(error)) {
       if (error.code === 'ERR_NETWORK') {
         console.error('[Report] 无法连接后端服务', error)
-        ElMessage.error('无法连接后端服务，请确认FastAPI接口已启动（默认端口 8001）。')
+        ElMessage.error('无法连接后端服务，请确认FastAPI接口已启动（默认端口范围 15000-15003）。')
         previewError.value = '无法连接后端服务，请确认后端已启动。'
       } else if (error.code === 'ECONNABORTED') {
         console.error('[Report] 生成报告请求超时', error)
