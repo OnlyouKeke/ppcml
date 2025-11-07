@@ -332,3 +332,33 @@
 [2025-11-06 21:01:18,972] INFO ctc_app - 报告元数据：{'宠物姓名:': '', '宠主姓名:': '', '年龄:': '', '性别:': '', '标本类型:': '', '一周内是否有药物摄入': '', '药物名称:': '', '备注:': ''}
 [2025-11-06 21:02:42,152] INFO ctc_app - 收到报告导出请求：report_token=20251106_210057, mask_option_id=, mask_option_ids=["3-21b_mask-0","3-6b_mask-1","4-13b_mask-0"]
 [2025-11-06 21:02:42,257] INFO ctc_app - 报告文档已生成：C:\electron-fastapi-starter\backend\var\20251106_210057\ctc_report.docx
+[2025-11-07 08:34:35,211] INFO ctc_app - 启动token验证成功
+[2025-11-07 08:34:36,166] INFO ctc_app - 收到CTC报告生成请求：zip文件=False，多文件数量=21，圆度阈值=0.30
+[2025-11-07 08:34:36,293] INFO ctc_app - 已接收多文件上传，工作目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-d80dxbd2
+[2025-11-07 08:34:36,293] INFO ctc_app - 报告输出目录：C:\electron-fastapi-starter\backend\var\20251107_083436
+[2025-11-07 08:34:36,293] INFO ctc_app - 开始处理影像数据，数据根目录：C:\Users\ADMINI~1\AppData\Local\Temp\ctc-analysis-d80dxbd2\uploaded\a
+[2025-11-07 08:34:36,293] INFO ctc - 处理蓝色图像: 2b.tif
+[2025-11-07 08:34:40,170] INFO ctc -   - CTC: 3, WBC: 0
+[2025-11-07 08:34:40,170] INFO ctc - 处理蓝色图像: 8b.tif
+[2025-11-07 08:34:43,348] INFO ctc -   - CTC: 2, WBC: 0
+[2025-11-07 08:34:43,348] INFO ctc - 通道 1 统计: CTC总数=5, WBC总数=0
+[2025-11-07 08:34:43,366] INFO ctc - 处理蓝色图像: 3b.tif
+[2025-11-07 08:34:46,129] INFO ctc -   - CTC: 0, WBC: 0
+[2025-11-07 08:34:46,129] INFO ctc - 通道 2 统计: CTC总数=0, WBC总数=0
+[2025-11-07 08:34:46,129] INFO ctc - 处理蓝色图像: 21b.tif
+[2025-11-07 08:34:48,711] INFO ctc -   - CTC: 13, WBC: 4
+[2025-11-07 08:34:48,711] INFO ctc - 处理蓝色图像: 6b.tif
+[2025-11-07 08:34:51,913] INFO ctc -   - CTC: 3, WBC: 1
+[2025-11-07 08:34:51,913] INFO ctc - 通道 3 统计: CTC总数=16, WBC总数=5
+[2025-11-07 08:34:51,914] INFO ctc - 处理蓝色图像: 13b.tif
+[2025-11-07 08:34:55,128] INFO ctc -   - CTC: 10, WBC: 5
+[2025-11-07 08:34:55,128] INFO ctc - 通道 4 统计: CTC总数=10, WBC总数=5
+[2025-11-07 08:34:55,128] INFO ctc - 处理蓝色图像: 29b.tif
+[2025-11-07 08:34:58,431] INFO ctc -   - CTC: 1, WBC: 0
+[2025-11-07 08:34:58,431] INFO ctc - 通道 5 统计: CTC总数=1, WBC总数=0
+[2025-11-07 08:34:58,431] INFO ctc_app - 图像处理完成，生成统计结果：['1', '2', '3', '4', '5']
+[2025-11-07 08:34:58,431] INFO ctc_app - 报告元数据：{'宠物姓名:': '', '宠主姓名:': '', '年龄:': '', '性别:': '', '标本类型:': '', '一周内是否有药物摄入': '', '药物名称:': '', '备注:': ''}
+[2025-11-07 08:35:19,554] INFO ctc_app - 收到报告导出请求：report_token=20251107_083436, mask_option_id=, mask_option_ids=["3-21b_mask-0","3-6b_mask-1","4-13b_mask-0"]
+[2025-11-07 08:35:19,639] INFO ctc_app - 报告文档已生成：C:\electron-fastapi-starter\backend\var\20251107_083436\ctc_report.docx
+[2025-11-07 08:35:38,270] INFO ctc_app - 收到报告导出请求：report_token=20251107_083436, mask_option_id=, mask_option_ids=["3-21b_mask-0","3-6b_mask-1","4-13b_mask-0"]
+[2025-11-07 08:35:38,327] INFO ctc_app - 报告文档已生成：C:\electron-fastapi-starter\backend\var\20251107_083436\ctc_report.docx
