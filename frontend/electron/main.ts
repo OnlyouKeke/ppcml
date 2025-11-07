@@ -3,6 +3,7 @@ import { join } from 'path'
 import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { platform } from 'os'
 import { createHash } from 'crypto'
+import { createServer } from 'net'
 
 // 是否是开发环境
 const isDev = process.env.NODE_ENV === 'development'
@@ -13,11 +14,45 @@ let fastApiProcess: ChildProcess | null = null
 // 主窗口
 let mainWindow: BrowserWindow | null = null
 
-// 后端端口
-const backendPort = isDev ? 8001 : 8000
+// 后端端口范围
+const BACKEND_PORT_START = 15000
+const BACKEND_PORT_END = 15003
 
-// 将后端端口暴露到渲染进程可读取的环境变量中
-process.env.FASTAPI_PORT = backendPort.toString()
+// 后端端口
+let backendPort = BACKEND_PORT_START
+
+// 检查端口是否可用
+async function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const tester = createServer()
+
+    tester.once('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EADDRINUSE') {
+        resolve(false)
+      } else {
+        console.error(`Unexpected error while testing port ${port}:`, error)
+        resolve(false)
+      }
+    })
+
+    tester.once('listening', () => {
+      tester.close(() => resolve(true))
+    })
+
+    tester.listen(port, '127.0.0.1')
+  })
+}
+
+async function findAvailablePort(startPort: number, endPort: number): Promise<number> {
+  for (let currentPort = startPort; currentPort <= endPort; currentPort += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    if (await isPortAvailable(currentPort)) {
+      return currentPort
+    }
+  }
+
+  throw new Error(`无法找到可用的端口（尝试范围：${startPort}-${endPort}）`)
+}
 
 // 生成启动token
 function generateStartupToken(): string {
@@ -161,7 +196,19 @@ function startFastApi() {
 }
 
 // 当Electron应用准备好时，创建窗口
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  try {
+    backendPort = await findAvailablePort(BACKEND_PORT_START, BACKEND_PORT_END)
+  } catch (error) {
+    console.error('未能找到可用的后端端口：', error)
+    app.quit()
+    return
+  }
+
+  // 将后端端口暴露到渲染进程可读取的环境变量中
+  process.env.FASTAPI_PORT = backendPort.toString()
+  console.log(`Using backend port: ${backendPort}`)
+
   // 启动FastAPI后端
   startFastApi()
   

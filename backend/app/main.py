@@ -1036,11 +1036,11 @@ async def export_ctc_report(
 if __name__ == "__main__":
     import uvicorn
 
-    port_str = os.environ.get("FASTAPI_PORT", "8001")
+    port_str = os.environ.get("FASTAPI_PORT", "15000")
     try:
         port = int(port_str)
     except ValueError:
-        logger.warning("警告：FASTAPI_PORT 设置无效（%s），使用默认端口 8001", port_str)
-        port = 8001
+        logger.warning("警告：FASTAPI_PORT 设置无效（%s），使用默认端口 15000", port_str)
+        port = 15000
 
     uvicorn.run(app, host="0.0.0.0", port=port)
