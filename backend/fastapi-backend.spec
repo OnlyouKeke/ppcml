@@ -8,13 +8,17 @@ BACKEND_DATAS = [
     (str(BASE_DIR / 'HBI.jpg'), 'HBI.jpg'),
 ]
 
+HIDDEN_IMPORTS = [
+    'ctc',
+]
+
 
 a = Analysis(
     ['app\\main.py'],
     pathex=[str(BASE_DIR)],
     binaries=[],
     datas=BACKEND_DATAS,
-    hiddenimports=[],
+    hiddenimports=HIDDEN_IMPORTS,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
