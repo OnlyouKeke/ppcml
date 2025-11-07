@@ -1,12 +1,24 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent
+BACKEND_DATAS = [
+    (str(BASE_DIR / 'HBI.jpg'), 'HBI.jpg'),
+]
+
+HIDDEN_IMPORTS = [
+    'ctc',
+]
+
 
 a = Analysis(
     ['app\\main.py'],
-    pathex=[],
+    pathex=[str(BASE_DIR)],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=BACKEND_DATAS,
+    hiddenimports=HIDDEN_IMPORTS,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
