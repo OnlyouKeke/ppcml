@@ -1,9 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-const isDev = process.env.NODE_ENV === 'development'
 const backendProtocol = process.env.FASTAPI_PROTOCOL || 'http'
 const backendHost = process.env.FASTAPI_HOST || '127.0.0.1'
-const backendPort = process.env.FASTAPI_PORT || (isDev ? '8001' : '8000')
+const backendPort = process.env.FASTAPI_PORT || '15000'
 const backendUrl = `${backendProtocol}://${backendHost}:${backendPort}`
 
 // 暴露安全的API给渲染进程
