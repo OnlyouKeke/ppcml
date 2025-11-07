@@ -5,13 +5,15 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 BACKEND_DATAS = [
-    (str(BASE_DIR / 'HBI.jpg'), 'HBI.jpg'),
+    (str(BASE_DIR / 'HBI.jpg'), '.'),
+    (str(BASE_DIR / 'app' / 'ctc.py'), 'app'),
+    (str(BASE_DIR / 'app' / 'main.py'), 'app'),
 ]
 
 HIDDEN_IMPORTS = [
     'ctc',
+    'app.ctc',
 ]
-
 
 a = Analysis(
     ['app\\main.py'],
