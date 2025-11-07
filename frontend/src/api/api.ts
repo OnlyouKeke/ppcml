@@ -7,7 +7,7 @@ const runtime = window.appRuntime
 const isElectron = Boolean(runtime?.isElectron)
 const backendUrl = runtime?.backend?.url
 
-const fallbackPort = process.env.NODE_ENV === 'development' ? '8001' : '8000'
+const fallbackPort = '15000'
 const defaultBackendUrl = `http://127.0.0.1:${fallbackPort}`
 
 // 创建axios实例
