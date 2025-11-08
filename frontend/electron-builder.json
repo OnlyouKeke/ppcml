@@ -2,7 +2,7 @@
   "appId": "com.example.electron-fastapi-vue",
   "productName": "宠物样本检测",
   "directories": {
-    "output": "release_new"
+    "output": "release"
   },
   "files": [
     "dist/**/*",
@@ -10,14 +10,8 @@
   ],
   "extraResources": [
     {
-      "from": "../backend",
-      "to": "backend",
-      "filter": ["**/*"]
-    },
-    {
-      "from": "resources",
-      "to": "resources",
-      "filter": ["**/*"]
+      "from": "resources/fastapi-backend.exe",
+      "to": "fastapi-backend.exe"
     }
   ],
   "win": {

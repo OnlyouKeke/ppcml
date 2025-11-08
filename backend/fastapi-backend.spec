@@ -1,17 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+import sys
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(sys.argv[0]).resolve().parent
 BACKEND_DATAS = [
     (str(BASE_DIR / 'HBI.jpg'), '.'),
     (str(BASE_DIR / 'app' / 'ctc.py'), 'app'),
-    (str(BASE_DIR / 'app' / 'main.py'), 'app'),
 ]
 
 HIDDEN_IMPORTS = [
-    'ctc',
     'app.ctc',
 ]
 
