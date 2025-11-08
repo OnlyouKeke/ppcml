@@ -110,6 +110,20 @@
                     若路径不存在将自动创建，并在其中输出 b 文件夹与 Word 报告。
                   </div>
                 </div>
+                <div class="mask-input-section">
+                  <el-input
+                    v-model="form.maskInputDirPath"
+                    placeholder="可选：请输入掩码输入文件夹路径"
+                    clearable
+                  >
+                    <template #prepend>
+                      <span class="output-folder-label">掩码</span>
+                    </template>
+                  </el-input>
+                  <div class="output-folder-tip">
+                    如需使用已有掩码图像，请填写该文件夹路径，系统会导入其中的掩码图像用于报告生成。
+                  </div>
+                </div>
               </div>
             </el-form-item>
         </el-form>
@@ -303,6 +317,7 @@ interface FormState {
   medicationDetails: string
   notes: string
   outputDirPath: string
+  maskInputDirPath: string
 }
 
 const form = reactive<FormState>({
@@ -314,7 +329,8 @@ const form = reactive<FormState>({
   medicationIntake: '',
   medicationDetails: '',
   notes: '',
-  outputDirPath: ''
+  outputDirPath: '',
+  maskInputDirPath: ''
 })
 
 watch(
@@ -658,6 +674,8 @@ const runDetection = async () => {
   }
 
   form.outputDirPath = outputDirPath
+  const maskInputDirPath = form.maskInputDirPath.trim()
+  form.maskInputDirPath = maskInputDirPath
 
   previewError.value = ''
   previewWarnings.value = []
@@ -678,7 +696,8 @@ const runDetection = async () => {
       folder: selectedFolderName.value,
       fileCount: selectedFiles.value.length,
       roundnessThreshold: roundnessThreshold.value,
-      outputDirPath
+      outputDirPath,
+      maskInputDirPath
     })
     isDetecting.value = true
     startHeartbeat()
@@ -696,13 +715,28 @@ const runDetection = async () => {
       },
       roundnessThreshold: roundnessThreshold.value,
       previewOnly: true,
-      outputDir: outputDirPath
+      outputDir: outputDirPath,
+      maskInputDir: maskInputDirPath
     })
 
     reportData.value = response
     reportToken.value = response.reportToken ?? ''
     maskOptions.value = response.maskOptions ?? []
-    selectedMaskOptionIds.value = []
+    const responseMaskInputDir = (response.maskInputDirectory ?? '').trim()
+    if (responseMaskInputDir) {
+      form.maskInputDirPath = responseMaskInputDir
+    }
+    const effectiveMaskDir = responseMaskInputDir || maskInputDirPath
+    const importedMaskOptions = maskOptions.value.filter(option =>
+      option.id.startsWith('external::') || option.channel === 'external'
+    )
+    if (effectiveMaskDir && importedMaskOptions.length) {
+      selectedMaskOptionIds.value = importedMaskOptions
+        .slice(0, requiredMaskSelectionCount)
+        .map(option => option.id)
+    } else {
+      selectedMaskOptionIds.value = []
+    }
     previewWarnings.value = response.warnings ?? []
     if (
       maskOptions.value.length > 0 &&
@@ -807,6 +841,7 @@ const resetAll = () => {
   form.medicationDetails = ''
   form.notes = ''
   form.outputDirPath = ''
+  form.maskInputDirPath = ''
   resetSelectedFolder()
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
@@ -959,6 +994,12 @@ onBeforeUnmount(() => {
 }
 
 .output-folder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mask-input-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
