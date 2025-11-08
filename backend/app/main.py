@@ -593,6 +593,77 @@ def _sanitize_pet_name(pet_name: str) -> str:
     return sanitized.strip("_")
 
 
+def _resolve_user_output_directory(path_str: str) -> Path | None:
+    """Resolve the user specified output directory and ensure it exists."""
+
+    normalized = path_str.strip()
+    if not normalized:
+        return None
+
+    candidate = Path(normalized).expanduser()
+    try:
+        candidate.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:  # pragma: no cover - 依赖运行环境
+        logger.exception("创建输出文件夹失败：%s", candidate)
+        raise HTTPException(status_code=400, detail="输出文件夹路径不可用") from exc
+
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        resolved = candidate
+
+    if not resolved.is_dir():
+        raise HTTPException(status_code=400, detail="输出文件夹路径不是文件夹")
+
+    return resolved
+
+
+def _sync_output_to_user_directory(
+    source_dir: Path,
+    user_dir: Path | None,
+    *,
+    copy_b: bool = True,
+) -> None:
+    """Copy generated artifacts into the user provided directory."""
+
+    if user_dir is None:
+        return
+
+    try:
+        user_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.exception("无法创建输出文件夹：%s", user_dir)
+        raise HTTPException(status_code=400, detail="输出文件夹路径不可用") from exc
+
+    try:
+        if source_dir.resolve() == user_dir.resolve():
+            return
+    except OSError:
+        pass
+
+    if copy_b:
+        source_b = source_dir / "b"
+        if source_b.exists():
+            target_b = user_dir / "b"
+            if target_b.exists():
+                shutil.rmtree(target_b, ignore_errors=True)
+            try:
+                shutil.copytree(source_b, target_b)
+            except OSError as exc:
+                logger.exception("复制 b 文件夹失败：%s -> %s", source_b, target_b)
+                raise HTTPException(status_code=500, detail="同步输出文件夹失败") from exc
+        else:
+            logger.warning("源目录缺少 b 文件夹：%s", source_b)
+
+    report_path = source_dir / "ctc_report.docx"
+    if report_path.exists():
+        try:
+            shutil.copy2(report_path, user_dir / "ctc_report.docx")
+        except OSError as exc:
+            logger.exception("复制报告文档失败：%s", report_path)
+            raise HTTPException(status_code=500, detail="同步输出文件夹失败") from exc
+
+
 def _prepare_output_directory(pet_name: str) -> Path:
     """Create the persistent output directory for generated artifacts."""
 
@@ -666,6 +737,7 @@ async def generate_ctc_report(
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
     preview_only: str = Form("false", alias="previewOnly"),
+    output_dir_path: str = Form("", alias="outputDirPath"),
 ) -> JSONResponse:
     uploaded_files = files or []
     preview_only_flag = str(preview_only).lower() in {"1", "true", "yes", "on"}
@@ -682,6 +754,7 @@ async def generate_ctc_report(
     work_dir: Path | None = None
     dataset_root: Path | None = None
     output_dir: Path | None = None
+    user_output_dir: Path | None = None
     try:
         if file is not None and file.filename:
             if not file.filename.lower().endswith(".zip"):
@@ -699,13 +772,25 @@ async def generate_ctc_report(
         else:
             raise HTTPException(status_code=400, detail="未提供有效的影像数据")
 
+        user_output_dir = _resolve_user_output_directory(output_dir_path)
+        if user_output_dir:
+            logger.info("指定输出文件夹：%s", user_output_dir)
+
         output_dir = _prepare_output_directory(pet_name)
+        processing_output_dir = output_dir / "b"
+        processing_output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("报告输出目录：%s", output_dir)
 
-        analyzer = CTCAnalyzer(str(dataset_root), str(output_dir), roundness_threshold=roundness_threshold)
+        analyzer = CTCAnalyzer(
+            str(dataset_root),
+            str(processing_output_dir),
+            roundness_threshold=roundness_threshold,
+        )
         logger.info("开始处理影像数据，数据根目录：%s", dataset_root)
         analyzer.process_all_images()
         logger.info("图像处理完成，生成统计结果：%s", analyzer.results.get("doc_names", []))
+
+        _sync_output_to_user_directory(output_dir, user_output_dir)
 
         metadata = _create_metadata_entries(
             pet_name,
@@ -842,6 +927,7 @@ async def generate_ctc_report(
                 for option in mask_options_payload
             ],
             "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
         }
         (output_dir / "report_state.json").write_text(
             json.dumps(state_payload, ensure_ascii=False, indent=2),
@@ -866,6 +952,7 @@ async def generate_ctc_report(
             "warnings": [],
             "reportToken": report_token,
             "maskOptions": mask_options_payload,
+            "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
         }
 
         if not preview_only_flag:
@@ -876,6 +963,7 @@ async def generate_ctc_report(
                 channel_summary_texts=channel_summary_texts,
             )
             logger.info("报告已生成：%s", report_path)
+            _sync_output_to_user_directory(output_dir, user_output_dir, copy_b=False)
             report_bytes = report_path.read_bytes()
             encoded_report = base64.b64encode(report_bytes).decode("ascii")
             response_payload["fileContent"] = encoded_report
@@ -950,6 +1038,12 @@ async def export_ctc_report(
     results = state_data.get("results") or {}
     channel_summary_texts = state_data.get("channelSummaryTexts") or []
     mask_options_state = state_data.get("maskOptions") or []
+    user_output_dir_str = state_data.get("userOutputDirectory") or ""
+    user_output_dir = (
+        _resolve_user_output_directory(user_output_dir_str)
+        if user_output_dir_str
+        else None
+    )
 
     selected_mask_option_ids: list[str] = []
     if mask_option_ids:
@@ -1020,6 +1114,8 @@ async def export_ctc_report(
     )
     logger.info("报告文档已生成：%s", report_path)
 
+    _sync_output_to_user_directory(output_dir, user_output_dir, copy_b=False)
+
     report_bytes = report_path.read_bytes()
     encoded_report = base64.b64encode(report_bytes).decode("ascii")
 
@@ -1029,6 +1125,7 @@ async def export_ctc_report(
             "fileContent": encoded_report,
             "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "reportToken": report_token,
+            "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
         }
     )
 
