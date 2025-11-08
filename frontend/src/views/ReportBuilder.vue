@@ -99,11 +99,26 @@
                 <div class="output-folder-section">
                   <el-input
                     v-model="form.outputDirPath"
-                    placeholder="请输入输出文件夹路径"
-                    clearable
+                    :placeholder="
+                      isOutputDirSelectionAvailable
+                        ? '请选择输出文件夹路径'
+                        : '请输入输出文件夹路径'
+                    "
+                    :readonly="isOutputDirSelectionAvailable"
+                    :clearable="!isOutputDirSelectionAvailable"
                   >
                     <template #prepend>
                       <span class="output-folder-label">路径</span>
+                    </template>
+                    <template v-if="isOutputDirSelectionAvailable" #append>
+                      <el-button
+                        type="primary"
+                        plain
+                        :loading="isSelectingOutputDir"
+                        @click="chooseOutputDirectory"
+                      >
+                        选择
+                      </el-button>
                     </template>
                   </el-input>
                   <div class="output-folder-tip">
@@ -330,6 +345,9 @@ const selectedFiles = ref<FileWithRelativePath[]>([])
 const selectedFolderName = ref('')
 const folderFileCount = ref(0)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
+const isOutputDirSelectionAvailable = Boolean(window.electronAPI?.selectOutputDirectory)
+const isSelectingOutputDir = ref(false)
 
 const isDetecting = ref(false)
 const reportData = ref<CtcReportResponse | null>(null)
@@ -645,6 +663,27 @@ const handleFolderChange = (event: Event) => {
   })
 }
 
+const chooseOutputDirectory = async () => {
+  if (!isOutputDirSelectionAvailable || !window.electronAPI?.selectOutputDirectory) {
+    ElMessage.warning('当前环境不支持目录选择，请手动输入输出路径')
+    return
+  }
+
+  try {
+    isSelectingOutputDir.value = true
+    const result = await window.electronAPI.selectOutputDirectory()
+    if (!result.canceled && result.filePath) {
+      form.outputDirPath = result.filePath
+      console.info('[Report] 已选择输出目录', { path: result.filePath })
+    }
+  } catch (error) {
+    console.error('[Report] 选择输出目录失败', error)
+    ElMessage.error('选择输出文件夹时出错，请重试')
+  } finally {
+    isSelectingOutputDir.value = false
+  }
+}
+
 const runDetection = async () => {
   if (!selectedFiles.value.length) {
     ElMessage.warning('请先选择包含影像的文件夹')
@@ -653,7 +692,7 @@ const runDetection = async () => {
 
   const outputDirPath = form.outputDirPath.trim()
   if (!outputDirPath) {
-    ElMessage.warning('请先填写输出文件夹路径')
+    ElMessage.warning('请先选择输出文件夹路径')
     return
   }
 

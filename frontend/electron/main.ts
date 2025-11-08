@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { join } from 'path'
 import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { platform } from 'os'
@@ -256,5 +256,25 @@ ipcMain.handle('get-app-info', () => {
     version: app.getVersion(),
     name: app.getName(),
     appPath: app.getAppPath()
+  }
+})
+
+ipcMain.handle('select-output-directory', async () => {
+  if (!mainWindow) {
+    return { canceled: true, filePath: '' }
+  }
+
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择输出文件夹',
+    properties: ['openDirectory', 'createDirectory']
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return { canceled: true, filePath: '' }
+  }
+
+  return {
+    canceled: false,
+    filePath: result.filePaths[0]
   }
 })

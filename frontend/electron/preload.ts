@@ -9,7 +9,8 @@ const backendUrl = `${backendProtocol}://${backendHost}:${backendPort}`
 contextBridge.exposeInMainWorld('electronAPI', {
   // 获取应用信息
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
-  
+  selectOutputDirectory: () => ipcRenderer.invoke('select-output-directory'),
+
   // 与主进程通信的方法
   send: (channel: string, data: any) => {
     // 白名单通道

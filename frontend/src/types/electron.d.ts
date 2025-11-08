@@ -1,5 +1,6 @@
 interface ElectronAPI {
   getAppInfo: () => Promise<{ version: string; name: string; appPath: string }>
+  selectOutputDirectory: () => Promise<{ canceled: boolean; filePath: string }>
   send: (channel: string, data: unknown) => void
   receive: (channel: string, func: (...args: any[]) => void) => void
 }
