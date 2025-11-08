@@ -110,6 +110,7 @@ interface CtcReportPayload {
   roundnessThreshold?: number
   previewOnly?: boolean
   outputDir?: string
+  maskInputDir?: string
 }
 
 export const postGenerateCtcReport = async ({
@@ -117,7 +118,8 @@ export const postGenerateCtcReport = async ({
   form,
   roundnessThreshold = 0.3,
   previewOnly = false,
-  outputDir = ''
+  outputDir = '',
+  maskInputDir = ''
 }: CtcReportPayload): Promise<CtcReportResponse> => {
   const formData = new FormData()
   console.debug('[API] Preparing CTC report request', {
@@ -128,7 +130,8 @@ export const postGenerateCtcReport = async ({
     form,
     roundnessThreshold,
     previewOnly,
-    outputDir
+    outputDir,
+    maskInputDir
   })
   files.forEach(file => {
     const relativePath = (file as FileWithRelativePath).webkitRelativePath || file.name
@@ -146,6 +149,7 @@ export const postGenerateCtcReport = async ({
   formData.append('roundnessThreshold', String(roundnessThreshold))
   formData.append('previewOnly', previewOnly ? 'true' : 'false')
   formData.append('outputDirPath', outputDir || '')
+  formData.append('maskInputDirPath', maskInputDir || '')
 
   try {
     const response = (await api.post<CtcReportResponse>('/ctc/report', formData, {
