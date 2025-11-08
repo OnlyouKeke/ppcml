@@ -1,0 +1,2 @@
+*.exe filter=lfs diff=lfs merge=lfs -text
+frontend/resources/fastapi-backend.exe filter=lfs diff=lfs merge=lfs -text
