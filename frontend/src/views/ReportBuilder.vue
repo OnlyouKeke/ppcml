@@ -96,6 +96,20 @@
                   {{ selectedFolderName || '已选文件夹' }}（{{ folderFileCount }} 个文件）
                 </div>
                 <div v-else class="upload-tip">请选择包含五个通道的影像文件夹</div>
+                <div class="output-folder-section">
+                  <el-input
+                    v-model="form.outputDirPath"
+                    placeholder="请输入输出文件夹路径"
+                    clearable
+                  >
+                    <template #prepend>
+                      <span class="output-folder-label">路径</span>
+                    </template>
+                  </el-input>
+                  <div class="output-folder-tip">
+                    若路径不存在将自动创建，并在其中输出 b 文件夹与 Word 报告。
+                  </div>
+                </div>
               </div>
             </el-form-item>
         </el-form>
@@ -288,6 +302,7 @@ interface FormState {
   medicationIntake: '是' | '否' | ''
   medicationDetails: string
   notes: string
+  outputDirPath: string
 }
 
 const form = reactive<FormState>({
@@ -298,7 +313,8 @@ const form = reactive<FormState>({
   sampleType: '',
   medicationIntake: '',
   medicationDetails: '',
-  notes: ''
+  notes: '',
+  outputDirPath: ''
 })
 
 watch(
@@ -635,6 +651,14 @@ const runDetection = async () => {
     return
   }
 
+  const outputDirPath = form.outputDirPath.trim()
+  if (!outputDirPath) {
+    ElMessage.warning('请先填写输出文件夹路径')
+    return
+  }
+
+  form.outputDirPath = outputDirPath
+
   previewError.value = ''
   previewWarnings.value = []
   isPreviewLoading.value = true
@@ -653,7 +677,8 @@ const runDetection = async () => {
     console.info('[Report] 开始请求后端生成报告', {
       folder: selectedFolderName.value,
       fileCount: selectedFiles.value.length,
-      roundnessThreshold: roundnessThreshold.value
+      roundnessThreshold: roundnessThreshold.value,
+      outputDirPath
     })
     isDetecting.value = true
     startHeartbeat()
@@ -670,7 +695,8 @@ const runDetection = async () => {
         notes: form.notes
       },
       roundnessThreshold: roundnessThreshold.value,
-      previewOnly: true
+      previewOnly: true,
+      outputDir: outputDirPath
     })
 
     reportData.value = response
@@ -780,6 +806,7 @@ const resetAll = () => {
   form.medicationIntake = ''
   form.medicationDetails = ''
   form.notes = ''
+  form.outputDirPath = ''
   resetSelectedFolder()
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
@@ -929,6 +956,25 @@ onBeforeUnmount(() => {
 .upload-tip {
   font-size: 13px;
   color: #9ca3af;
+}
+
+.output-folder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.output-folder-label {
+  display: inline-block;
+  min-width: 32px;
+  color: #1f2937;
+}
+
+.output-folder-tip {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 .mask-selection {

@@ -53,6 +53,7 @@ export interface CtcReportResponse {
   warnings?: string[]
   reportToken?: string
   maskOptions?: ReportMaskOption[]
+  userOutputDirectory?: string
 }
 
 export interface CtcReportDocxResponse {
@@ -60,4 +61,5 @@ export interface CtcReportDocxResponse {
   fileContent: string
   generatedAt: string
   reportToken?: string
+  userOutputDirectory?: string
 }
