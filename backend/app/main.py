@@ -362,7 +362,16 @@ def _build_report_document(
     mask_options: list[dict] | None = None,
 ) -> None:
     document = Document()
+    # 修改logo路径查找逻辑，使其在打包后也能正确找到logo文件
     logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
+    
+    # 如果在默认位置找不到logo，则尝试在exe文件同目录下查找
+    if not logo_path.exists():
+        if getattr(sys, 'frozen', False):
+            # 如果是打包后的exe文件，尝试在exe同目录下查找
+            exe_dir = Path(sys.executable).parent
+            logo_path = exe_dir / "HBI.jpg"
+    
     if logo_path.exists():
         logo_paragraph = document.add_paragraph()
         logo_run = logo_paragraph.add_run()

@@ -12,6 +12,10 @@
     {
       "from": "resources/fastapi-backend.exe",
       "to": "fastapi-backend.exe"
+    },
+    {
+      "from": "../backend/HBI.jpg",
+      "to": "HBI.jpg"
     }
   ],
   "win": {
