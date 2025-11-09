@@ -110,20 +110,6 @@
                     若路径不存在将自动创建，并在其中输出 b 文件夹与 Word 报告。
                   </div>
                 </div>
-                <div class="mask-input-section">
-                  <el-input
-                    v-model="form.maskInputDirPath"
-                    placeholder="可选：请输入掩码输入文件夹路径"
-                    clearable
-                  >
-                    <template #prepend>
-                      <span class="output-folder-label">掩码</span>
-                    </template>
-                  </el-input>
-                  <div class="output-folder-tip">
-                    如需使用已有掩码图像，请填写该文件夹路径，系统会导入其中的掩码图像用于报告生成。
-                  </div>
-                </div>
               </div>
             </el-form-item>
         </el-form>
@@ -135,6 +121,9 @@
         </template>
         <div class="mask-selection">
           <p class="mask-instruction">请选择需要插入 Word 报告的三个通道掩码图像。</p>
+          <div v-if="maskDirectoryPath" class="mask-directory">
+            掩码图像来源文件夹：<span class="mask-directory-path">{{ maskDirectoryPath }}</span>
+          </div>
           <div v-if="isPreviewLoading" class="mask-loading">
             <el-skeleton :rows="3" animated />
           </div>
@@ -317,7 +306,6 @@ interface FormState {
   medicationDetails: string
   notes: string
   outputDirPath: string
-  maskInputDirPath: string
 }
 
 const form = reactive<FormState>({
@@ -329,8 +317,7 @@ const form = reactive<FormState>({
   medicationIntake: '',
   medicationDetails: '',
   notes: '',
-  outputDirPath: '',
-  maskInputDirPath: ''
+  outputDirPath: ''
 })
 
 watch(
@@ -354,6 +341,7 @@ const generatedReportUrl = ref('')
 const reportToken = ref('')
 const maskOptions = ref<ReportMaskOption[]>([])
 const selectedMaskOptionIds = ref<string[]>([])
+const maskDirectoryPath = ref('')
 const previewError = ref('')
 const previewWarnings = ref<string[]>([])
 const isPreviewLoading = ref(false)
@@ -674,12 +662,11 @@ const runDetection = async () => {
   }
 
   form.outputDirPath = outputDirPath
-  const maskInputDirPath = form.maskInputDirPath.trim()
-  form.maskInputDirPath = maskInputDirPath
 
   previewError.value = ''
   previewWarnings.value = []
   isPreviewLoading.value = true
+  maskDirectoryPath.value = ''
 
   if (generatedReportUrl.value) {
     revokeObjectUrl(generatedReportUrl.value)
@@ -696,8 +683,7 @@ const runDetection = async () => {
       folder: selectedFolderName.value,
       fileCount: selectedFiles.value.length,
       roundnessThreshold: roundnessThreshold.value,
-      outputDirPath,
-      maskInputDirPath
+      outputDirPath
     })
     isDetecting.value = true
     startHeartbeat()
@@ -715,22 +701,20 @@ const runDetection = async () => {
       },
       roundnessThreshold: roundnessThreshold.value,
       previewOnly: true,
-      outputDir: outputDirPath,
-      maskInputDir: maskInputDirPath
+      outputDir: outputDirPath
     })
 
     reportData.value = response
     reportToken.value = response.reportToken ?? ''
     maskOptions.value = response.maskOptions ?? []
     const responseMaskInputDir = (response.maskInputDirectory ?? '').trim()
-    if (responseMaskInputDir) {
-      form.maskInputDirPath = responseMaskInputDir
-    }
-    const effectiveMaskDir = responseMaskInputDir || maskInputDirPath
+    const responseUserOutputDir = (response.userOutputDirectory ?? '').trim()
+    maskDirectoryPath.value =
+      responseUserOutputDir || responseMaskInputDir || outputDirPath
     const importedMaskOptions = maskOptions.value.filter(option =>
       option.id.startsWith('external::') || option.channel === 'external'
     )
-    if (effectiveMaskDir && importedMaskOptions.length) {
+    if (responseMaskInputDir && importedMaskOptions.length) {
       selectedMaskOptionIds.value = importedMaskOptions
         .slice(0, requiredMaskSelectionCount)
         .map(option => option.id)
@@ -841,8 +825,8 @@ const resetAll = () => {
   form.medicationDetails = ''
   form.notes = ''
   form.outputDirPath = ''
-  form.maskInputDirPath = ''
   resetSelectedFolder()
+  maskDirectoryPath.value = ''
   if (fileInputRef.value) {
     fileInputRef.value.value = ''
   }
@@ -999,12 +983,6 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
-.mask-input-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 .output-folder-label {
   display: inline-block;
   min-width: 32px;
@@ -1028,6 +1006,22 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 13px;
   color: #4b5563;
+}
+
+.mask-directory {
+  font-size: 12px;
+  color: #4b5563;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
+  padding: 8px 12px;
+  line-height: 1.6;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  word-break: break-all;
+}
+
+.mask-directory-path {
+  font-weight: 600;
+  color: #1e3a8a;
 }
 
 .mask-loading {
