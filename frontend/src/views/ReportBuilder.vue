@@ -98,24 +98,22 @@
                 <div v-else class="upload-tip">请选择包含五个通道的影像文件夹</div>
                 <div class="output-folder-section">
                   <div class="output-folder-selector">
-                    <input
-                      ref="outputDirInputRef"
-                      class="upload-input"
-                      type="file"
-                      webkitdirectory
-                      @change="handleOutputFolderChange"
-                    />
-                    <el-button
-                      type="primary"
-                      plain
-                      @click="triggerOutputFolderSelection"
+                    <el-input
+                      v-model="form.outputDirPath"
+                      placeholder="请输入或选择输出文件夹路径"
+                      clearable
+                      class="output-folder-input"
                     >
-                      选择输出文件夹
-                    </el-button>
-                    <div v-if="form.outputDirPath" class="output-folder-path">
-                      {{ form.outputDirPath }}
-                    </div>
-                    <div v-else class="output-folder-tip">请选择输出文件夹</div>
+                      <template #append>
+                        <el-button
+                          type="primary"
+                          plain
+                          @click="triggerOutputFolderSelection"
+                        >
+                          选择输出文件夹
+                        </el-button>
+                      </template>
+                    </el-input>
                   </div>
                   <div class="output-folder-tip">
                     若路径不存在将自动创建，并在其中输出 b 文件夹与 Word 报告。
@@ -344,8 +342,6 @@ const selectedFiles = ref<FileWithRelativePath[]>([])
 const selectedFolderName = ref('')
 const folderFileCount = ref(0)
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const outputDirInputRef = ref<HTMLInputElement | null>(null)
-const outputDirUpload = ref()
 
 const isDetecting = ref(false)
 const reportData = ref<CtcReportResponse | null>(null)
@@ -896,22 +892,26 @@ const beforeUpload = (file: File) => {
   return false
 }
 
-const triggerOutputFolderSelection = () => {
-  if (outputDirInputRef.value) {
-    outputDirInputRef.value.click()
-  }
-}
-
-const handleOutputFolderChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const files = target.files
-  
-  if (!files || !files.length) {
+const triggerOutputFolderSelection = async () => {
+  if (!window.electronAPI?.selectDirectory) {
+    ElMessage.warning('当前环境不支持文件夹选择，请手动输入输出路径')
     return
   }
-  
-  const firstFile = files[0] as FileWithRelativePath
-  form.outputDirPath = firstFile.webkitRelativePath || firstFile.name
+
+  try {
+    const selectedPath = await window.electronAPI.selectDirectory({
+      title: '选择输出文件夹',
+      buttonLabel: '选择',
+      properties: ['openDirectory', 'createDirectory']
+    })
+
+    if (selectedPath) {
+      form.outputDirPath = selectedPath
+    }
+  } catch (error) {
+    console.error('[Report] 选择输出文件夹失败', error)
+    ElMessage.error('选择输出文件夹时出现问题，请重试')
+  }
 }
 
 onBeforeUnmount(() => {
@@ -1027,6 +1027,15 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.output-folder-input :deep(.el-input-group__append) {
+  padding: 0;
+}
+
+.output-folder-input :deep(.el-button) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .output-folder-label {

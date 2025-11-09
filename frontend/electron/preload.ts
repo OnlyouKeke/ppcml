@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { OpenDialogOptions } from 'electron'
 
 const backendProtocol = process.env.FASTAPI_PROTOCOL || 'http'
 const backendHost = process.env.FASTAPI_HOST || '127.0.0.1'
@@ -29,6 +30,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // 添加新的监听器
       ipcRenderer.on(channel, (_, ...args) => func(...args));
     }
+  },
+
+  // 选择目录
+  selectDirectory: (options?: OpenDialogOptions) => {
+    const mergedOptions: OpenDialogOptions = {
+      title: '选择输出文件夹',
+      buttonLabel: '选择',
+      properties: ['openDirectory', 'createDirectory'],
+      ...options
+    }
+
+    if (options?.properties) {
+      const propertySet = new Set(options.properties)
+      propertySet.add('openDirectory')
+      propertySet.add('createDirectory')
+      mergedOptions.properties = Array.from(propertySet)
+    }
+
+    return ipcRenderer.invoke('select-directory', mergedOptions)
   }
 })
 
