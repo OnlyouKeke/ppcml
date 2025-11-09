@@ -137,7 +137,7 @@
             <el-skeleton :rows="3" animated />
           </div>
           <div v-else-if="!reportToken" class="mask-placeholder">
-            生成报告预览后，将在此展示带有 <code>mask</code> 后缀的图像供选择。
+            生成报告预览后，将在此展示生成的所有图像供选择。
           </div>
           <el-empty
             v-else-if="!maskOptions.length"
