@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import type { OpenDialogOptions } from 'electron'
 import { join } from 'path'
 import { spawn, spawnSync, ChildProcess } from 'child_process'
 import { platform } from 'os'
@@ -257,4 +258,35 @@ ipcMain.handle('get-app-info', () => {
     name: app.getName(),
     appPath: app.getAppPath()
   }
+})
+
+ipcMain.handle('select-directory', async (_, options: OpenDialogOptions | undefined) => {
+  const window = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined
+  const defaultProperties: OpenDialogOptions['properties'] = [
+    'openDirectory',
+    'createDirectory'
+  ]
+
+  const mergedOptions: OpenDialogOptions = {
+    title: '选择输出文件夹',
+    buttonLabel: '选择',
+    properties: defaultProperties,
+    ...options
+  }
+
+  if (options?.properties) {
+    const propertySet = new Set(options.properties)
+    propertySet.add('openDirectory')
+    propertySet.add('createDirectory')
+    mergedOptions.properties = Array.from(propertySet)
+  }
+
+  const result = window
+    ? await dialog.showOpenDialog(window, mergedOptions)
+    : await dialog.showOpenDialog(mergedOptions)
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths[0]
 })
