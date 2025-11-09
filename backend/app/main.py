@@ -933,35 +933,85 @@ async def generate_ctc_report(
 
         mask_options_payload: list[dict] = []
         mask_paths_map = analyzer.results.get("mask_paths", {}) or {}
+        seen_relative_paths: set[str] = set()
+
+        def _append_mask_option(
+            path_obj: Path,
+            channel_label: str,
+            label: str,
+            *,
+            option_id: str | None = None,
+        ) -> None:
+            if not path_obj.exists():
+                return
+            encoded_preview = _encode_preview_image(path_obj)
+            if not encoded_preview:
+                return
+            mime_type, encoded_data = encoded_preview
+            try:
+                relative_path_obj = path_obj.relative_to(output_dir)
+            except ValueError:
+                relative_path_obj = Path(path_obj.name)
+            normalized_relative = str(relative_path_obj).replace(os.sep, "/")
+            if normalized_relative in seen_relative_paths:
+                return
+            seen_relative_paths.add(normalized_relative)
+            mask_options_payload.append(
+                {
+                    "id": option_id or f"{channel_label}::{normalized_relative}",
+                    "channel": channel_label,
+                    "label": label,
+                    "relativePath": normalized_relative,
+                    "mimeType": mime_type or "image/png",
+                    "data": encoded_data,
+                }
+            )
+
         for channel, mask_paths in mask_paths_map.items():
+            channel_str = str(channel)
+            directories_for_channel: set[Path] = set()
             for index, mask_path in enumerate(mask_paths):
                 mask_path_obj = Path(mask_path)
                 if not mask_path_obj.exists():
                     continue
-                try:
-                    relative_path = mask_path_obj.relative_to(output_dir)
-                except ValueError:
-                    relative_path = Path(mask_path_obj.name)
-                encoded_preview = _encode_preview_image(mask_path_obj)
-                if not encoded_preview:
-                    continue
-                mime_type, encoded_data = encoded_preview
-                option_id = f"{channel}-{mask_path_obj.stem}-{index}"
+                directories_for_channel.add(mask_path_obj.parent)
                 option_label = (
-                    f"{channel}通道掩码"
+                    f"{channel_str}通道掩码"
                     if len(mask_paths) == 1
-                    else f"{channel}通道掩码 {index + 1}"
+                    else f"{channel_str}通道掩码 {index + 1}"
                 )
-                mask_options_payload.append(
-                    {
-                        "id": option_id,
-                        "channel": str(channel),
-                        "label": option_label,
-                        "relativePath": str(relative_path).replace(os.sep, "/"),
-                        "mimeType": mime_type or "image/png",
-                        "data": encoded_data,
-                    }
+                option_id = f"{channel_str}-{mask_path_obj.stem}-{index}"
+                _append_mask_option(
+                    mask_path_obj,
+                    channel_str,
+                    option_label,
+                    option_id=option_id,
                 )
+
+            for directory in sorted(
+                directories_for_channel, key=lambda item: item.as_posix()
+            ):
+                for candidate in sorted(
+                    directory.rglob("*"), key=lambda item: item.as_posix()
+                ):
+                    if (
+                        candidate.is_file()
+                        and candidate.suffix.lower() in MASK_IMAGE_EXTENSIONS
+                    ):
+                        label = f"{channel_str}通道图像：{candidate.name}"
+                        _append_mask_option(candidate, channel_str, label)
+
+        if not mask_options_payload:
+            fallback_root = output_dir / "b"
+            if fallback_root.exists():
+                for candidate in sorted(
+                    fallback_root.rglob("*"), key=lambda item: item.as_posix()
+                ):
+                    if (
+                        candidate.is_file()
+                        and candidate.suffix.lower() in MASK_IMAGE_EXTENSIONS
+                    ):
+                        _append_mask_option(candidate, "all", candidate.name)
 
         warnings: list[str] = []
 
