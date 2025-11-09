@@ -717,7 +717,7 @@ def _sync_output_to_user_directory(
 
     try:
         user_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as exc:
+    except OSError as exc:  # pragma: no cover - 依赖运行环境
         logger.exception("无法创建输出文件夹：%s", user_dir)
         raise HTTPException(status_code=400, detail="输出文件夹路径不可用") from exc
 
@@ -728,18 +728,28 @@ def _sync_output_to_user_directory(
         pass
 
     if copy_b:
-        source_b = source_dir / "b"
-        if source_b.exists():
-            target_b = user_dir / "b"
-            if target_b.exists():
-                shutil.rmtree(target_b, ignore_errors=True)
+        # 查找时间戳命名的子目录而不是固定的"b"目录
+        timestamp_dir = None
+        for item in source_dir.iterdir():
+            if item.is_dir() and len(item.name) == 15 and item.name[8] == '_':  # 格式 YYYYMMDD_HHMMSS
+                try:
+                    datetime.strptime(item.name, "%Y%m%d_%H%M%S")
+                    timestamp_dir = item
+                    break
+                except ValueError:
+                    continue
+        
+        if timestamp_dir and timestamp_dir.exists():
+            target_timestamp_dir = user_dir / timestamp_dir.name
+            if target_timestamp_dir.exists():
+                shutil.rmtree(target_timestamp_dir, ignore_errors=True)
             try:
-                shutil.copytree(source_b, target_b)
+                shutil.copytree(timestamp_dir, target_timestamp_dir)
             except OSError as exc:
-                logger.exception("复制 b 文件夹失败：%s -> %s", source_b, target_b)
+                logger.exception("复制时间戳文件夹失败：%s -> %s", timestamp_dir, target_timestamp_dir)
                 raise HTTPException(status_code=500, detail="同步输出文件夹失败") from exc
         else:
-            logger.warning("源目录缺少 b 文件夹：%s", source_b)
+            logger.warning("源目录缺少时间戳文件夹：%s", source_dir)
 
     report_path = source_dir / "ctc_report.docx"
     if report_path.exists():
@@ -875,7 +885,9 @@ async def generate_ctc_report(
             logger.info("指定输出文件夹：%s", user_output_dir)
 
         output_dir = _prepare_output_directory()
-        processing_output_dir = output_dir / "b"
+        # 使用时间戳作为目录名替换原来的"b"
+        timestamp_dir_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+        processing_output_dir = output_dir / timestamp_dir_name
         processing_output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("报告输出目录：%s", output_dir)
 

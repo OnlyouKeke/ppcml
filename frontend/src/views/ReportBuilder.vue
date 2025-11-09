@@ -116,7 +116,7 @@
                     </el-input>
                   </div>
                   <div class="output-folder-tip">
-                    若路径不存在将自动创建，并在其中输出 b 文件夹与 Word 报告。
+                    若路径不存在将自动创建，并在其中输出处理结果与 Word 报告。
                   </div>
                 </div>
               </div>
