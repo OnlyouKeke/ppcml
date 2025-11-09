@@ -90,6 +90,7 @@ logging.basicConfig(
 logger = logging.getLogger("ctc_app")
 
 INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
+MASK_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 
 
 def verify_startup_token() -> None:
@@ -618,6 +619,102 @@ def _resolve_user_output_directory(path_str: str) -> Path | None:
     return resolved
 
 
+def _resolve_mask_input_directory(path_str: str) -> Path:
+    """Resolve the directory that contains external mask images."""
+
+    normalized = path_str.strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="掩码输入文件夹路径不可为空")
+
+    candidate = Path(normalized).expanduser()
+    try:
+        resolved = candidate.resolve()
+    except OSError:
+        resolved = candidate
+
+    if not resolved.exists():
+        raise HTTPException(status_code=400, detail="掩码输入文件夹不存在")
+
+    if not resolved.is_dir():
+        raise HTTPException(status_code=400, detail="掩码输入文件夹不是文件夹")
+
+    return resolved
+
+
+def _import_mask_images_from_directory(mask_dir: Path, output_dir: Path) -> tuple[list[dict], list[str]]:
+    """Import mask images from an external directory into the output directory."""
+
+    warnings: list[str] = []
+    mask_files = sorted(
+        (
+            path
+            for path in mask_dir.rglob("*")
+            if path.is_file() and path.suffix.lower() in MASK_IMAGE_EXTENSIONS
+        ),
+        key=lambda item: item.as_posix(),
+    )
+
+    if not mask_files:
+        warnings.append("掩码输入文件夹中未找到支持的图像文件")
+        return [], warnings
+
+    target_root = output_dir / "external_masks"
+    options: list[dict] = []
+
+    for source_path in mask_files:
+        try:
+            relative_source = source_path.relative_to(mask_dir)
+        except ValueError:
+            relative_source = Path(source_path.name)
+
+        destination = target_root / relative_source
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_path, destination)
+        except shutil.SameFileError:
+            logger.debug("掩码图像已位于目标目录，跳过复制：%s", source_path)
+            continue
+        except FileNotFoundError:
+            warnings.append(f"无法导入掩码图像：{relative_source}")
+            logger.warning("掩码图像复制失败（未找到源文件）：%s", source_path)
+            continue
+        except OSError as exc:
+            warnings.append(f"无法导入掩码图像：{relative_source}")
+            logger.warning("掩码图像复制失败：%s -> %s (%s)", source_path, destination, exc)
+            continue
+
+        encoded_preview = _encode_preview_image(destination)
+        if not encoded_preview:
+            warnings.append(f"无法读取掩码图像：{relative_source}")
+            logger.warning("掩码图像预览生成失败：%s", destination)
+            continue
+
+        mime_type, encoded_data = encoded_preview
+        try:
+            relative_output = destination.relative_to(output_dir)
+        except ValueError:
+            relative_output = Path(destination.name)
+
+        option_id = f"external::{relative_output.as_posix()}"
+        label = relative_source.as_posix() if relative_source.parts else destination.name
+
+        options.append(
+            {
+                "id": option_id,
+                "channel": "external",
+                "label": label,
+                "relativePath": str(relative_output).replace(os.sep, "/"),
+                "mimeType": mime_type or "image/png",
+                "data": encoded_data,
+            }
+        )
+
+    if options:
+        logger.info("已导入外部掩码图像 %d 张：%s", len(options), mask_dir)
+
+    return options, warnings
+
+
 def _sync_output_to_user_directory(
     source_dir: Path,
     user_dir: Path | None,
@@ -661,6 +758,17 @@ def _sync_output_to_user_directory(
             shutil.copy2(report_path, user_dir / "ctc_report.docx")
         except OSError as exc:
             logger.exception("复制报告文档失败：%s", report_path)
+            raise HTTPException(status_code=500, detail="同步输出文件夹失败") from exc
+
+    external_masks_dir = source_dir / "external_masks"
+    if external_masks_dir.exists():
+        target_external_masks = user_dir / "external_masks"
+        if target_external_masks.exists():
+            shutil.rmtree(target_external_masks, ignore_errors=True)
+        try:
+            shutil.copytree(external_masks_dir, target_external_masks)
+        except OSError as exc:
+            logger.exception("复制外部掩码图像失败：%s", external_masks_dir)
             raise HTTPException(status_code=500, detail="同步输出文件夹失败") from exc
 
 
@@ -738,6 +846,7 @@ async def generate_ctc_report(
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
     preview_only: str = Form("false", alias="previewOnly"),
     output_dir_path: str = Form("", alias="outputDirPath"),
+    mask_input_dir_path: str = Form("", alias="maskInputDirPath"),
 ) -> JSONResponse:
     uploaded_files = files or []
     preview_only_flag = str(preview_only).lower() in {"1", "true", "yes", "on"}
@@ -755,6 +864,7 @@ async def generate_ctc_report(
     dataset_root: Path | None = None
     output_dir: Path | None = None
     user_output_dir: Path | None = None
+    mask_input_dir: Path | None = None
     try:
         if file is not None and file.filename:
             if not file.filename.lower().endswith(".zip"):
@@ -789,8 +899,6 @@ async def generate_ctc_report(
         logger.info("开始处理影像数据，数据根目录：%s", dataset_root)
         analyzer.process_all_images()
         logger.info("图像处理完成，生成统计结果：%s", analyzer.results.get("doc_names", []))
-
-        _sync_output_to_user_directory(output_dir, user_output_dir)
 
         metadata = _create_metadata_entries(
             pet_name,
@@ -854,6 +962,22 @@ async def generate_ctc_report(
                         "data": encoded_data,
                     }
                 )
+
+        warnings: list[str] = []
+
+        mask_input_dir_value = mask_input_dir_path.strip()
+        if mask_input_dir_value:
+            mask_input_dir = _resolve_mask_input_directory(mask_input_dir_value)
+            logger.info("指定掩码输入文件夹：%s", mask_input_dir)
+            external_mask_options, external_warnings = _import_mask_images_from_directory(
+                mask_input_dir, output_dir
+            )
+            mask_options_payload.extend(external_mask_options)
+            warnings.extend(external_warnings)
+        else:
+            mask_input_dir = None
+
+        _sync_output_to_user_directory(output_dir, user_output_dir)
 
         ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
         image_set_payload: dict | None = None
@@ -928,6 +1052,7 @@ async def generate_ctc_report(
             ],
             "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
+            "maskInputDirectory": str(mask_input_dir) if mask_input_dir else "",
         }
         (output_dir / "report_state.json").write_text(
             json.dumps(state_payload, ensure_ascii=False, indent=2),
@@ -949,10 +1074,11 @@ async def generate_ctc_report(
             "hasCtcImages": bool(image_set_payload),
             "imageSet": image_set_payload,
             "channelSummaryTexts": channel_summary_texts,
-            "warnings": [],
             "reportToken": report_token,
             "maskOptions": mask_options_payload,
             "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
+            "maskInputDirectory": str(mask_input_dir) if mask_input_dir else "",
+            "warnings": warnings,
         }
 
         if not preview_only_flag:
