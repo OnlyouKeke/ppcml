@@ -583,17 +583,6 @@ async def _prepare_workdir_from_files(files: List[UploadFile]) -> tuple[Path, Pa
     return work_dir, dataset_dir
 
 
-def _sanitize_pet_name(pet_name: str) -> str:
-    """Sanitize the pet name for safe filesystem usage."""
-
-    stripped = pet_name.strip()
-    if not stripped:
-        return ""
-
-    sanitized = re.sub(r"[^\w\-\u4e00-\u9fff]+", "_", stripped)
-    return sanitized.strip("_")
-
-
 def _resolve_user_output_directory(path_str: str) -> Path | None:
     """Resolve the user specified output directory and ensure it exists."""
 
@@ -772,15 +761,14 @@ def _sync_output_to_user_directory(
             raise HTTPException(status_code=500, detail="同步输出文件夹失败") from exc
 
 
-def _prepare_output_directory(pet_name: str) -> Path:
+def _prepare_output_directory() -> Path:
     """Create the persistent output directory for generated artifacts."""
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_pet_name = _sanitize_pet_name(pet_name)
-    folder_name = f"{timestamp}_{safe_pet_name}" if safe_pet_name else timestamp
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
+    folder_name = timestamp
     target_dir = OUTPUT_ROOT / folder_name
     suffix = 1
     while target_dir.exists():
@@ -886,7 +874,7 @@ async def generate_ctc_report(
         if user_output_dir:
             logger.info("指定输出文件夹：%s", user_output_dir)
 
-        output_dir = _prepare_output_directory(pet_name)
+        output_dir = _prepare_output_directory()
         processing_output_dir = output_dir / "b"
         processing_output_dir.mkdir(parents=True, exist_ok=True)
         logger.info("报告输出目录：%s", output_dir)
