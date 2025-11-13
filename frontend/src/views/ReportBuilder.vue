@@ -376,8 +376,7 @@
             </el-button>
             <el-button :disabled="!hasReport" @click="resetAll">重置内容</el-button>
           </div>
-        </div>
-      </el-card>
-    </section>
-  </div>
-</template>
+        </el-card>
+      </section>
+    </div>
+  </template>
