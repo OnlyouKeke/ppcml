@@ -84,8 +84,6 @@ logging.basicConfig(
     handlers=[_file_handler, _stream_handler],
 )
 
-
-
 logger = logging.getLogger("ctc_app")
 
 INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
@@ -180,25 +178,22 @@ def _create_metadata_entries(
     notes: str,
 ) -> OrderedDict:
     entries: OrderedDict[str, str] = OrderedDict()
-    entries["机构名称:"] = _normalize_field(institution_name)
-    entries["报告编号:"] = _normalize_field(report_number)
-    entries["检测日期:"] = _normalize_field(detection_date)
-    entries["样本编号:"] = _normalize_field(sample_number).upper()
-    entries["样品量（单位ml）:"] = _normalize_field(sample_volume)
-    entries["样本状态:"] = _normalize_field(sample_status)
-    entries["宠物类型:"] = _normalize_field(pet_type)
-    entries["癌症标志物:"] = _normalize_field(cancer_biomarker)
-    entries["科别:"] = _normalize_field(department)
-    entries["宠物姓名:"] = _normalize_field(pet_name)
-    entries["宠主姓名:"] = _normalize_field(owner_name)
-    entries["年龄:"] = _normalize_field(age)
-    entries["性别:"] = _normalize_field(gender)
-    entries["标本类型:"] = _normalize_field(sample_type)
-
-    intake_value = _normalize_field(medication_intake)
-    entries["一周内是否有药物摄入"] = intake_value
-
-    entries["备注:"] = _normalize_field(notes)
+    # 按照新顺序调整字段
+    entries["宠主姓名"] = _normalize_field(owner_name)
+    entries["宠物姓名"] = _normalize_field(pet_name)
+    entries["性别"] = _normalize_field(gender)
+    entries["宠物类型"] = _normalize_field(pet_type)
+    entries["年龄"] = _normalize_field(age)
+    entries["机构名称"] = _normalize_field(institution_name)
+    entries["检测日期"] = _normalize_field(detection_date)
+    entries["科别"] = _normalize_field(department)
+    entries["癌症标志物"] = _normalize_field(cancer_biomarker)
+    entries["标本类型"] = _normalize_field(sample_type)
+    entries["样品量（单位ml）"] = _normalize_field(sample_volume)
+    entries["样本编号"] = _normalize_field(sample_number).upper()
+    entries["样本状态"] = _normalize_field(sample_status)
+    entries["一周内是否有药物摄入"] = _normalize_field(medication_intake)
+    entries["备注"] = _normalize_field(notes)
     return entries
 
 
@@ -437,7 +432,7 @@ def _build_report_document(
     title_paragraph = document.add_paragraph()
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     brand_run = title_paragraph.add_run("FlowCanis ")
-    _apply_run_style(brand_run, 28, bold=True, color=RGBColor(220, 38, 38))
+    _apply_run_style(brand_run, 28, bold=True, color=RGBColor(0, 0, 0))  # 改为黑色
     brand_rpr = brand_run._element.get_or_add_rPr()
     brand_fonts = brand_rpr.rFonts
     if brand_fonts is None:
@@ -457,7 +452,7 @@ def _build_report_document(
     divider_paragraph = document.add_paragraph()
     divider_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     primary_divider = divider_paragraph.add_run("══════════════════════════════════════════════════════")
-    _apply_run_style(primary_divider, 10, color=RGBColor(220, 38, 38))
+    _apply_run_style(primary_divider, 10, color=RGBColor(0, 0, 0))  # 改为黑色
     secondary_divider = divider_paragraph.add_run("\n──────────────────────────────────────────────────────")
     _apply_run_style(secondary_divider, 8, color=RGBColor(75, 85, 99))
     divider_paragraph.paragraph_format.space_after = Pt(6)
@@ -466,37 +461,38 @@ def _build_report_document(
     report_number_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     report_number_text = _ensure_value(metadata.get("报告编号") if metadata else None, "未填写")
     report_number_run = report_number_paragraph.add_run(f"编号：[{report_number_text}]")
-    _apply_run_style(report_number_run, 12, bold=True, color=RGBColor(185, 28, 28))
+    _apply_run_style(report_number_run, 12, bold=True, color=RGBColor(0, 0, 0))  # 改为黑色
     report_number_paragraph.paragraph_format.space_after = Pt(12)
 
     if metadata:
         detection_date = _format_report_date(metadata.get("检测日期"))
+        # 按照新顺序调整字段
         info_layout = [
             [
-                {"label": "送检单位", "value": _wrap_parentheses(metadata.get("机构名称"))},
                 {"label": "宠主姓名", "value": _wrap_parentheses(metadata.get("宠主姓名"))},
                 {"label": "宠物姓名", "value": _wrap_parentheses(metadata.get("宠物姓名"))},
-                {"label": "受检宠物", "value": _wrap_parentheses(metadata.get("宠物类型"))},
-            ],
-            [
-                {"label": "送检日期", "value": _wrap_parentheses(detection_date)},
-                {"label": "年龄", "value": _wrap_parentheses(metadata.get("年龄"))},
                 {"label": "性别", "value": _wrap_parentheses(metadata.get("性别"))},
-                {"label": "标本类型", "value": _wrap_parentheses(metadata.get("标本类型"))},
+                {"label": "宠物类型", "value": _wrap_parentheses(metadata.get("宠物类型"))},
             ],
             [
-                {"label": "样本编号", "value": _wrap_parentheses(metadata.get("样本编号"))},
-                {"label": "样本状态", "value": _ensure_value(metadata.get("样本状态"))},
-                {"label": "样品量", "value": _format_sample_volume(metadata.get("样品量（单位ml）"))},
-                {"label": "癌症标志物", "value": _wrap_parentheses(metadata.get("癌症标志物"))},
-            ],
-            [
+                {"label": "年龄", "value": _wrap_parentheses(metadata.get("年龄"))},
+                {"label": "送检单位", "value": _wrap_parentheses(metadata.get("机构名称"))},
+                {"label": "送检时间", "value": _wrap_parentheses(detection_date)},
                 {"label": "科别", "value": _wrap_parentheses(metadata.get("科别"))},
+            ],
+            [
+                {"label": "癌症标志物", "value": _wrap_parentheses(metadata.get("癌症标志物"))},
+                {"label": "样本类型", "value": _wrap_parentheses(metadata.get("标本类型"))},
+                {"label": "样品量", "value": _format_sample_volume(metadata.get("样品量（单位ml）"))},
+                {"label": "样本编号", "value": _wrap_parentheses(metadata.get("样本编号"))},
+            ],
+            [
+                {"label": "样本状态", "value": _ensure_value(metadata.get("样本状态"))},
                 {
-                    "label": "药物摄入情况",
+                    "label": "一周内是否有药物摄入",
                     "value": _ensure_value(metadata.get("一周内是否有药物摄入")),
                 },
-                {"label": "备注", "value": _ensure_value(metadata.get("备注"), "无"), "span": 2},
+                {"label": "如有，请说明", "value": _ensure_value(metadata.get("备注"), "无"), "span": 2},
             ],
         ]
 
@@ -515,7 +511,7 @@ def _build_report_document(
                     cell,
                     label,
                     value,
-                    label_color=RGBColor(185, 28, 28),
+                    label_color=RGBColor(0, 0, 0),  # 改为黑色
                     value_color=RGBColor(31, 41, 55),
                 )
                 if span > 1:
@@ -641,7 +637,7 @@ def _build_report_document(
     )
     result_paragraph = document.add_paragraph()
     result_run = result_paragraph.add_run(result_text)
-    _apply_run_style(result_run, 12, color=RGBColor(220, 38, 38) if doc_names else RGBColor(107, 114, 128))
+    _apply_run_style(result_run, 12, color=RGBColor(0, 0, 0) if doc_names else RGBColor(107, 114, 128))  # 改为黑色
 
     biomarker_value = (metadata.get("癌症标志物") or "").strip()
     biomarker_text = biomarker_value if biomarker_value else "______________"
