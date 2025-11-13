@@ -1,7 +1,6 @@
 import hashlib
 import logging
 import os
-import re
 import sys
 # 设置环境变量确保UTF-8编码
 os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -92,6 +91,11 @@ logger = logging.getLogger("ctc_app")
 INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
 MASK_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 
+DISCLAIMER_LINES = [
+    "声明：本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。",
+    "建议结合兽医临床表现、影像学及其他实验室检查综合判断。",
+]
+
 
 def verify_startup_token() -> None:
     """验证启动token，确保只能通过前端启动"""
@@ -158,16 +162,33 @@ def _normalize_field(value: str) -> str:
 
 
 def _create_metadata_entries(
+    institution_name: str,
+    report_number: str,
+    detection_date: str,
+    sample_number: str,
+    sample_volume: str,
+    sample_status: str,
+    pet_type: str,
+    cancer_biomarker: str,
+    department: str,
     pet_name: str,
     owner_name: str,
     age: str,
     gender: str,
     sample_type: str,
     medication_intake: str,
-    medication_details: str,
     notes: str,
 ) -> OrderedDict:
     entries: OrderedDict[str, str] = OrderedDict()
+    entries["机构名称:"] = _normalize_field(institution_name)
+    entries["报告编号:"] = _normalize_field(report_number)
+    entries["检测日期:"] = _normalize_field(detection_date)
+    entries["样本编号:"] = _normalize_field(sample_number).upper()
+    entries["样品量（单位ml）:"] = _normalize_field(sample_volume)
+    entries["样本状态:"] = _normalize_field(sample_status)
+    entries["宠物类型:"] = _normalize_field(pet_type)
+    entries["癌症标志物:"] = _normalize_field(cancer_biomarker)
+    entries["科别:"] = _normalize_field(department)
     entries["宠物姓名:"] = _normalize_field(pet_name)
     entries["宠主姓名:"] = _normalize_field(owner_name)
     entries["年龄:"] = _normalize_field(age)
@@ -177,33 +198,8 @@ def _create_metadata_entries(
     intake_value = _normalize_field(medication_intake)
     entries["一周内是否有药物摄入"] = intake_value
 
-    if intake_value == "是":
-        entries["药物名称:"] = _format_medication_schedule(medication_details)
-    elif intake_value == "否":
-        entries["药物名称:"] = "无（近期未使用药物）"
-    else:
-        formatted_details = _format_medication_schedule(medication_details)
-        entries["药物名称:"] = formatted_details or _normalize_field(medication_details)
-
     entries["备注:"] = _normalize_field(notes)
     return entries
-
-
-def _format_medication_schedule(medication_details: str) -> str:
-    """将药物明细格式化为更易读的排班列表"""
-    normalized = _normalize_field(medication_details)
-    if not normalized:
-        return ""
-
-    parts = [part.strip() for part in re.split(r"[、,，;；\n\r]+", normalized) if part.strip()]
-    if not parts:
-        return normalized
-
-    if len(parts) == 1:
-        return parts[0]
-
-    formatted_lines = [f"{index + 1}. {item}" for index, item in enumerate(parts)]
-    return "\n".join(formatted_lines)
 
 
 def _encode_preview_image(image_path: Path) -> tuple[str, str] | None:
@@ -286,6 +282,23 @@ def _set_cell_text(
         tc_pr.append(shading)
 
 
+def _set_label_value_cell(
+    cell,
+    label: str,
+    value: str,
+    *,
+    label_color: RGBColor,
+    value_color: RGBColor,
+) -> None:
+    cell.text = ""
+    paragraph = cell.paragraphs[0]
+    label_run = paragraph.add_run(f"{label}：")
+    _apply_run_style(label_run, 12, bold=True, color=label_color)
+    value_run = paragraph.add_run(value)
+    _apply_run_style(value_run, 12, color=value_color)
+    paragraph.paragraph_format.space_after = Pt(0)
+
+
 def _add_section_heading(document: Document, text: str, *, color: RGBColor) -> None:
     paragraph = document.add_paragraph()
     run = paragraph.add_run(text)
@@ -352,6 +365,47 @@ def _format_channel_summary_texts(analyzer: CTCAnalyzer) -> list[str]:
     return [f"{label} {values}" for label, values in channel_summary_pairs]
 
 
+def _wrap_parentheses(value: str | None) -> str:
+    if not value:
+        return "（未填写）"
+    normalized = value.strip()
+    if not normalized:
+        return "（未填写）"
+    if normalized.startswith("（") and normalized.endswith("）"):
+        return normalized
+    return f"（{normalized}）"
+
+
+def _ensure_value(value: str | None, fallback: str = "未填写") -> str:
+    if not value:
+        return fallback
+    normalized = value.strip()
+    return normalized if normalized else fallback
+
+
+def _format_sample_volume(value: str | None) -> str:
+    normalized = _ensure_value(value)
+    if normalized == "未填写":
+        return normalized
+    compact = normalized.replace(" ", "")
+    if compact.lower().endswith("ml"):
+        return normalized
+    return f"{normalized} ml"
+
+
+def _format_report_date(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = value.strip()
+    if not normalized:
+        return ""
+    parts = normalized.split("-")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return normalized
+    year, month, day = parts
+    return f"{year}年{int(month)}月{int(day)}日"
+
+
 def _build_report_document(
     analyzer: CTCAnalyzer,
     metadata: OrderedDict[str, str],
@@ -381,32 +435,101 @@ def _build_report_document(
 
 
     title_paragraph = document.add_paragraph()
-    title_run = title_paragraph.add_run("检测报告")
-    _apply_run_style(title_run, 28, bold=True, color=RGBColor(31, 41, 55))
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    brand_run = title_paragraph.add_run("FlowCanis ")
+    _apply_run_style(brand_run, 28, bold=True, color=RGBColor(220, 38, 38))
+    brand_rpr = brand_run._element.get_or_add_rPr()
+    brand_fonts = brand_rpr.rFonts
+    if brand_fonts is None:
+        brand_fonts = OxmlElement("w:rFonts")
+        brand_rpr.append(brand_fonts)
+    brand_fonts.set(qn("w:ascii"), "Times New Roman")
+    brand_fonts.set(qn("w:hAnsi"), "Times New Roman")
+    brand_fonts.set(qn("w:cs"), "Times New Roman")
+    main_title_run = title_paragraph.add_run("微流控循环肿瘤细胞分选")
+    _apply_run_style(main_title_run, 24, bold=True, color=RGBColor(31, 41, 55))
+
+    subtitle_paragraph = document.add_paragraph()
+    subtitle_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    subtitle_run = subtitle_paragraph.add_run("与免疫荧光识别检测报告单")
+    _apply_run_style(subtitle_run, 20, bold=True, color=RGBColor(31, 41, 55))
+
+    divider_paragraph = document.add_paragraph()
+    divider_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    primary_divider = divider_paragraph.add_run("══════════════════════════════════════════════════════")
+    _apply_run_style(primary_divider, 10, color=RGBColor(220, 38, 38))
+    secondary_divider = divider_paragraph.add_run("\n──────────────────────────────────────────────────────")
+    _apply_run_style(secondary_divider, 8, color=RGBColor(75, 85, 99))
+    divider_paragraph.paragraph_format.space_after = Pt(6)
+
+    report_number_paragraph = document.add_paragraph()
+    report_number_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    report_number_text = _ensure_value(metadata.get("报告编号") if metadata else None, "未填写")
+    report_number_run = report_number_paragraph.add_run(f"编号：[{report_number_text}]")
+    _apply_run_style(report_number_run, 12, bold=True, color=RGBColor(185, 28, 28))
+    report_number_paragraph.paragraph_format.space_after = Pt(12)
 
     if metadata:
-        _add_section_heading(document, "基础信息", color=RGBColor(37, 99, 235))
+        detection_date = _format_report_date(metadata.get("检测日期"))
+        info_layout = [
+            [
+                {"label": "送检单位", "value": _wrap_parentheses(metadata.get("机构名称"))},
+                {"label": "宠主姓名", "value": _wrap_parentheses(metadata.get("宠主姓名"))},
+                {"label": "宠物姓名", "value": _wrap_parentheses(metadata.get("宠物姓名"))},
+                {"label": "受检宠物", "value": _wrap_parentheses(metadata.get("宠物类型"))},
+            ],
+            [
+                {"label": "送检日期", "value": _wrap_parentheses(detection_date)},
+                {"label": "年龄", "value": _wrap_parentheses(metadata.get("年龄"))},
+                {"label": "性别", "value": _wrap_parentheses(metadata.get("性别"))},
+                {"label": "标本类型", "value": _wrap_parentheses(metadata.get("标本类型"))},
+            ],
+            [
+                {"label": "样本编号", "value": _wrap_parentheses(metadata.get("样本编号"))},
+                {"label": "样本状态", "value": _ensure_value(metadata.get("样本状态"))},
+                {"label": "样品量", "value": _format_sample_volume(metadata.get("样品量（单位ml）"))},
+                {"label": "癌症标志物", "value": _wrap_parentheses(metadata.get("癌症标志物"))},
+            ],
+            [
+                {"label": "科别", "value": _wrap_parentheses(metadata.get("科别"))},
+                {
+                    "label": "药物摄入情况",
+                    "value": _ensure_value(metadata.get("一周内是否有药物摄入")),
+                },
+                {"label": "备注", "value": _ensure_value(metadata.get("备注"), "无"), "span": 2},
+            ],
+        ]
 
-        rows = (len(metadata) + 1) // 2
-        info_table = document.add_table(rows=rows, cols=4)
+        info_table = document.add_table(rows=len(info_layout), cols=4)
         info_table.autofit = True
-        info_table.style = None
-        _set_table_transparent(info_table)
+        info_table.style = "Table Grid"
 
-        for index, (label, value) in enumerate(metadata.items()):
-            row = info_table.rows[index // 2]
-            label_cell_index = (index % 2) * 2
-            label_cell = row.cells[label_cell_index]
-            value_cell = row.cells[label_cell_index + 1]
+        for row_index, fields in enumerate(info_layout):
+            column_index = 0
+            for field in fields:
+                label = field["label"]
+                value = field["value"]
+                span = field.get("span", 1)
+                cell = info_table.cell(row_index, column_index)
+                _set_label_value_cell(
+                    cell,
+                    label,
+                    value,
+                    label_color=RGBColor(185, 28, 28),
+                    value_color=RGBColor(31, 41, 55),
+                )
+                if span > 1:
+                    merged_cell = cell
+                    for offset in range(1, span):
+                        merged_cell = merged_cell.merge(info_table.cell(row_index, column_index + offset))
+                    column_index += span
+                else:
+                    column_index += 1
 
-            _set_cell_text(label_cell, label, bold=True, color=RGBColor(37, 99, 235))
-            _set_cell_text(value_cell, value or "", color=RGBColor(31, 41, 55))
-
-        if len(metadata) % 2 == 1:
-            last_row = info_table.rows[-1]
-            _set_cell_text(last_row.cells[2], "", color=RGBColor(31, 41, 55))
-            _set_cell_text(last_row.cells[3], "", color=RGBColor(31, 41, 55))
+            while column_index < 4:
+                empty_cell = info_table.cell(row_index, column_index)
+                _set_cell_text(empty_cell, "", color=RGBColor(31, 41, 55))
+                column_index += 1
 
 
     result_heading = document.add_paragraph()
@@ -520,12 +643,18 @@ def _build_report_document(
     result_run = result_paragraph.add_run(result_text)
     _apply_run_style(result_run, 12, color=RGBColor(220, 38, 38) if doc_names else RGBColor(107, 114, 128))
 
+    biomarker_value = (metadata.get("癌症标志物") or "").strip()
+    biomarker_text = biomarker_value if biomarker_value else "______________"
+    biomarker_paragraph = document.add_paragraph()
+    biomarker_run = biomarker_paragraph.add_run(f"癌症标志物：{biomarker_text}")
+    _apply_run_style(biomarker_run, 12, color=RGBColor(30, 64, 45))
+
     notes_value = (metadata.get("备注") or "").strip()
-    biomarker_text = notes_value if notes_value else "______________"
-    remark_paragraph = document.add_paragraph()
-    remark_run = remark_paragraph.add_run(f"备注：生物标记物染色选用{biomarker_text}。")
-    _apply_run_style(remark_run, 12, color=RGBColor(30, 64, 45))
-    
+    if notes_value:
+        notes_paragraph = document.add_paragraph()
+        notes_run = notes_paragraph.add_run(f"备注：{notes_value}")
+        _apply_run_style(notes_run, 12, color=RGBColor(30, 64, 45))
+
     separator = document.add_paragraph()
     separator_run = separator.add_run("--------------------------------------------------------------------")
     _apply_run_style(separator_run, 12, color=RGBColor(75, 85, 99))
@@ -536,6 +665,14 @@ def _build_report_document(
     footer_run = footer.add_run("检测人：___________    审核人：___________    报告日期：___________")
     _apply_run_style(footer_run, 12, color=RGBColor(75, 85, 99))
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    for index, line in enumerate(DISCLAIMER_LINES):
+        disclaimer_paragraph = document.add_paragraph()
+        disclaimer_paragraph.paragraph_format.space_before = Pt(4 if index == 0 else 2)
+        disclaimer_paragraph.paragraph_format.space_after = Pt(0)
+        disclaimer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        disclaimer_run = disclaimer_paragraph.add_run(line)
+        _apply_run_style(disclaimer_run, 10, color=RGBColor(107, 114, 128))
 
     document.save(output_path)
 
@@ -842,13 +979,21 @@ async def heartbeat() -> dict[str, float | str]:
 async def generate_ctc_report(
     file: UploadFile | None = File(None),
     files: List[UploadFile] | None = File(None),
+    institution_name: str = Form("", alias="institutionName"),
+    report_number: str = Form("", alias="reportNumber"),
+    detection_date: str = Form("", alias="detectionDate"),
+    sample_number: str = Form("", alias="sampleNumber"),
+    sample_volume: str = Form("", alias="sampleVolume"),
+    sample_status: str = Form("", alias="sampleStatus"),
+    pet_type: str = Form("", alias="petType"),
+    cancer_biomarker: str = Form("", alias="cancerBiomarker"),
+    department: str = Form("", alias="department"),
     pet_name: str = Form("", alias="petName"),
     owner_name: str = Form("", alias="ownerName"),
     age: str = Form("", alias="age"),
     gender: str = Form("", alias="gender"),
     sample_type: str = Form("", alias="sampleType"),
     medication_intake: str = Form("", alias="medicationIntake"),
-    medication_details: str = Form("", alias="medicationDetails"),
     notes: str = Form("", alias="notes"),
     roundness_threshold: float = Form(0.3, alias="roundnessThreshold"),
     preview_only: str = Form("false", alias="previewOnly"),
@@ -910,13 +1055,21 @@ async def generate_ctc_report(
         logger.info("图像处理完成，生成统计结果：%s", analyzer.results.get("doc_names", []))
 
         metadata = _create_metadata_entries(
+            institution_name,
+            report_number,
+            detection_date,
+            sample_number,
+            sample_volume,
+            sample_status,
+            pet_type,
+            cancer_biomarker,
+            department,
             pet_name,
             owner_name,
             age,
             gender,
             sample_type,
             medication_intake,
-            medication_details,
             notes,
         )
         logger.info(
@@ -1083,9 +1236,15 @@ async def generate_ctc_report(
             else "结果说明：未识别出有效的检测结果，请检查上传的影像资料。"
         )
 
+        biomarker_value = (metadata.get("癌症标志物") or "").strip()
+        biomarker_text = biomarker_value if biomarker_value else "______________"
+        remark_lines = [f"癌症标志物：{biomarker_text}"]
+
         notes_value = (metadata.get("备注") or "").strip()
-        biomarker_text = notes_value if notes_value else "______________"
-        remark_text = f"备注：生物标记物染色选用{biomarker_text}。"
+        if notes_value:
+            remark_lines.append(f"备注：{notes_value}")
+
+        remark_text = "\n".join(remark_lines)
 
         metadata_items = [
             {"label": label, "value": value}

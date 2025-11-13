@@ -15,6 +15,91 @@
         <el-form :model="form" label-width="120px" label-position="left" class="info-form">
             <el-row :gutter="16" class="form-row">
               <el-col :xs="24" :sm="12">
+                <el-form-item label="机构名称">
+                  <el-input v-model="form.institutionName" placeholder="请输入机构名称" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="报告编号">
+                  <el-input v-model="form.reportNumber" placeholder="请输入报告编号" clearable />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="检测日期">
+                  <el-date-picker
+                    v-model="form.detectionDate"
+                    type="date"
+                    placeholder="请选择检测日期"
+                    value-format="YYYY-MM-DD"
+                    style="width: 100%"
+                    clearable
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="样本编号">
+                  <el-input
+                    v-model="form.sampleNumber"
+                    :maxlength="sampleNumberMaxLength"
+                    :disabled="!form.petType"
+                    placeholder="请选择宠物类型后填写"
+                    @input="handleSampleNumberInput"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="样品量（单位ml）">
+                  <el-input
+                    v-model="form.sampleVolume"
+                    placeholder="请输入样品量"
+                    type="number"
+                    clearable
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="样本状态">
+                  <el-radio-group v-model="form.sampleStatus">
+                    <el-radio label="合格">合格</el-radio>
+                    <el-radio label="不合格">不合格</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="宠物类型">
+                  <el-radio-group v-model="form.petType">
+                    <el-radio label="猫">猫</el-radio>
+                    <el-radio label="狗">狗</el-radio>
+                    <el-radio label="其他">其他</el-radio>
+                  </el-radio-group>
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="癌症标志物">
+                  <el-input v-model="form.cancerBiomarker" placeholder="请输入癌症标志物" clearable />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="科别">
+                  <el-input v-model="form.department" placeholder="请输入科别" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="标本类型">
+                  <el-input v-model="form.sampleType" placeholder="请输入标本类型" clearable />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="16" class="form-row">
+              <el-col :xs="24" :sm="12">
                 <el-form-item label="宠物姓名">
                   <el-input v-model="form.petName" placeholder="宠物姓名" clearable />
                 </el-form-item>
@@ -43,12 +128,7 @@
             </el-row>
             <el-row :gutter="16" class="form-row">
               <el-col :xs="24" :sm="12">
-                <el-form-item label="标本类型">
-                  <el-input v-model="form.sampleType" placeholder="请输入标本类型" clearable />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="12">
-                <el-form-item label="一周内药物摄入">
+                <el-form-item label="一周内是否有药物摄入">
                   <el-radio-group v-model="form.medicationIntake">
                     <el-radio label="是">是</el-radio>
                     <el-radio label="否">否</el-radio>
@@ -56,14 +136,6 @@
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-form-item label="如有，哪些？">
-              <el-input
-                v-model="form.medicationDetails"
-                placeholder="请输入药物名称"
-                :disabled="form.medicationIntake !== '是'"
-                clearable
-              />
-            </el-form-item>
             <el-form-item label="备注信息">
               <el-input
                 v-model="form.notes"
@@ -195,54 +267,85 @@
               v-else-if="reportData && isMaskSelectionComplete"
               class="preview-content"
             >
-              <div class="preview-header">
-                <div class="preview-heading">
-                  <h3 class="preview-title">检测报告</h3>
-                  <p class="preview-generated-at">生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}</p>
+              <div class="report-preview">
+                <header class="report-header">
+                  <div class="report-title">
+                    <div class="report-title-line">
+                      <span class="report-title-brand">FlowCanis</span>
+                      <span class="report-title-text">微流控循环肿瘤细胞分选</span>
+                    </div>
+                    <div class="report-title-line report-title-line--secondary">
+                      与免疫荧光识别检测报告单
+                    </div>
+                  </div>
+                  <div class="report-divider">
+                    <span class="report-divider-line report-divider-line--primary" />
+                    <span class="report-divider-line report-divider-line--secondary" />
+                  </div>
+                  <div class="report-number">编号：{{ reportNumberDisplay }}</div>
+                </header>
+                <div class="report-generated-at">
+                  生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}
                 </div>
-              </div>
-              <section class="preview-section">
-                <h4 class="section-title">基础信息</h4>
-                <table class="metadata-table">
-                  <tbody>
-                    <tr v-for="(row, rowIndex) in metadataRows" :key="rowIndex">
-                      <template v-for="(cell, cellIndex) in row" :key="cellIndex">
-                        <th class="metadata-heading">
-                          <span v-if="cell">{{ cell.label }}</span>
-                        </th>
-                        <td class="metadata-data">
-                          <span v-if="cell">{{ cell.value }}</span>
-                        </td>
-                      </template>
-                    </tr>
-                  </tbody>
-                </table>
-              </section>
-              <section v-if="channelPreviewItems.length" class="preview-section">
-                <h4 class="section-title">通道图像</h4>
-                <div v-if="channelSummaryTexts.length" class="channel-summary-texts">
-                  <p
-                    v-for="(text, index) in channelSummaryTexts"
-                    :key="`summary-${index}`"
-                    class="channel-summary-text"
+                <section class="report-info">
+                  <div
+                    v-for="(row, rowIndex) in previewInfoRows"
+                    :key="rowIndex"
+                    class="report-info-row"
                   >
-                    {{ text }}
+                    <div
+                      v-for="(field, fieldIndex) in row"
+                      :key="fieldIndex"
+                      class="report-info-cell"
+                      :class="{
+                        'report-info-cell--wide': field.span === 2,
+                        'report-info-cell--full': field.span === 4
+                      }"
+                    >
+                      <span class="report-info-label">{{ field.label }}：</span>
+                      <span class="report-info-value">{{ field.value }}</span>
+                    </div>
+                  </div>
+                </section>
+                <section v-if="channelPreviewItems.length" class="report-section">
+                  <h4 class="section-title">通道图像</h4>
+                  <div v-if="channelSummaryTexts.length" class="channel-summary-texts">
+                    <p
+                      v-for="(text, index) in channelSummaryTexts"
+                      :key="`summary-${index}`"
+                      class="channel-summary-text"
+                    >
+                      {{ text }}
+                    </p>
+                  </div>
+                  <div class="channel-preview-grid">
+                    <div
+                      v-for="item in channelPreviewItems"
+                      :key="item.label"
+                      class="channel-preview-card"
+                    >
+                      <div class="channel-preview-label">{{ item.label }}</div>
+                      <img
+                        :src="item.src"
+                        class="channel-preview-image"
+                        :alt="`${item.label}预览图`"
+                      />
+                    </div>
+                  </div>
+                </section>
+                <footer class="preview-footer">
+                  检测人：______________&nbsp;&nbsp;&nbsp;&nbsp;审核人：______________&nbsp;&nbsp;&nbsp;&nbsp;报告日期：______________
+                </footer>
+                <div class="preview-disclaimer">
+                  <p
+                    v-for="(line, index) in disclaimerLines"
+                    :key="index"
+                    class="preview-disclaimer-line"
+                  >
+                    {{ line }}
                   </p>
                 </div>
-                <div class="channel-preview-grid">
-                  <div
-                    v-for="item in channelPreviewItems"
-                    :key="item.label"
-                    class="channel-preview-card"
-                  >
-                    <div class="channel-preview-label">{{ item.label }}</div>
-                    <img :src="item.src" class="channel-preview-image" :alt="`${item.label}预览图`" />
-                  </div>
-                </div>
-              </section>
-              <footer class="preview-footer">
-                检测人：______________&nbsp;&nbsp;&nbsp;&nbsp;审核人：______________&nbsp;&nbsp;&nbsp;&nbsp;报告日期：______________
-              </footer>
+              </div>
             </div>
             <div
               v-else-if="reportData && !isMaskSelectionComplete"
@@ -303,37 +406,129 @@ interface ChannelPreviewItem {
   src: string
 }
 
+interface PreviewInfoField {
+  label: string
+  value: string
+  span?: number
+}
+
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
+const petTypePrefixes = {
+  猫: 'CAT',
+  狗: 'DOG',
+  其他: 'OTH'
+} as const
+
+type PetType = keyof typeof petTypePrefixes
+
+const disclaimerLines = [
+  '声明：本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。',
+  '建议结合兽医临床表现、影像学及其他实验室检查综合判断。'
+]
+
 interface FormState {
+  institutionName: string
+  reportNumber: string
+  detectionDate: string
+  sampleNumber: string
+  sampleVolume: string
+  sampleStatus: '合格' | '不合格' | ''
+  petType: '猫' | '狗' | '其他' | ''
+  cancerBiomarker: string
+  department: string
   petName: string
   ownerName: string
   gender: string
   age: string
   sampleType: string
   medicationIntake: '是' | '否' | ''
-  medicationDetails: string
   notes: string
   outputDirPath: string
 }
 
 const form = reactive<FormState>({
+  institutionName: '',
+  reportNumber: '',
+  detectionDate: '',
+  sampleNumber: '',
+  sampleVolume: '',
+  sampleStatus: '',
+  petType: '',
+  cancerBiomarker: '',
+  department: '',
   petName: '',
   ownerName: '',
   gender: '',
   age: '',
   sampleType: '',
   medicationIntake: '',
-  medicationDetails: '',
   notes: '',
   outputDirPath: ''
 })
 
+const sanitizeSampleNumberDigits = (value: string) => value.replace(/\D/g, '').slice(0, 7)
+
+const buildSampleNumber = (digits: string, petType: string) => {
+  const prefix = petTypePrefixes[petType as PetType]
+  if (!prefix) {
+    return digits
+  }
+  if (!digits) {
+    return prefix
+  }
+  return `${prefix}${digits}`
+}
+
+const handleSampleNumberInput = (value: string) => {
+  if (!form.petType) {
+    const digitsOnly = sanitizeSampleNumberDigits(value)
+    if (digitsOnly !== form.sampleNumber) {
+      form.sampleNumber = digitsOnly
+    }
+    return
+  }
+
+  const prefix = petTypePrefixes[form.petType as PetType]
+  const stripped = value.startsWith(prefix) ? value.slice(prefix.length) : value
+  const digitsOnly = sanitizeSampleNumberDigits(stripped)
+  const nextValue = buildSampleNumber(digitsOnly, form.petType)
+  if (nextValue !== form.sampleNumber) {
+    form.sampleNumber = nextValue
+  }
+}
+
+const sampleNumberMaxLength = computed(() => {
+  if (!form.petType) {
+    return 7
+  }
+  const prefix = petTypePrefixes[form.petType as PetType]
+  return prefix.length + 7
+})
+
+const getNormalizedSampleNumber = () => {
+  const sanitizedValue = sanitizeText(form.sampleNumber)
+  if (!sanitizedValue) {
+    return ''
+  }
+  if (!form.petType) {
+    return sanitizedValue.toUpperCase()
+  }
+  const digitsOnly = sanitizeSampleNumberDigits(sanitizedValue)
+  return buildSampleNumber(digitsOnly, form.petType)
+}
+
 watch(
-  () => form.medicationIntake,
-  value => {
-    if (value !== '是') {
-      form.medicationDetails = ''
+  () => form.petType,
+  newValue => {
+    if (!newValue) {
+      form.sampleNumber = ''
+      return
+    }
+    const digitsOnly = sanitizeSampleNumberDigits(form.sampleNumber)
+    const nextValue = buildSampleNumber(digitsOnly, newValue)
+    if (nextValue !== form.sampleNumber) {
+      form.sampleNumber = nextValue
     }
   }
 )
@@ -393,61 +588,62 @@ const sanitizeText = (value: string | null | undefined) => {
   return trimmed === '' ? '' : trimmed
 }
 
-const splitMedicationDetails = (value: string) =>
-  value
-    .split(/[、,，;；\n\r]+/)
-    .map(item => item.trim())
-    .filter(Boolean)
-
-const buildMedicationSchedule = (details: string) => {
-  if (!details) {
+const formatDateForDisplay = (value: string) => {
+  if (!value) {
     return ''
   }
-  const parts = splitMedicationDetails(details)
-  if (!parts.length) {
-    return details
+  const match = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (!match) {
+    return value
   }
-  if (parts.length === 1) {
-    return parts[0]
-  }
-  return parts.map((item, index) => `${index + 1}. ${item}`).join('\n')
+  const [, year, month, day] = match
+  const monthNumber = Number(month)
+  const dayNumber = Number(day)
+  return `${year}年${monthNumber}月${dayNumber}日`
 }
 
-const resolveMedicationValue = (intake: string, details: string) => {
-  const normalizedIntake = sanitizeText(intake)
-  const normalizedDetails = sanitizeText(details)
-
-  if (!normalizedIntake) {
-    return buildMedicationSchedule(normalizedDetails)
+const wrapWithParentheses = (value: string) => {
+  if (!value) {
+    return '（未填写）'
   }
-
-  if (normalizedIntake === '否') {
-    return '无（近期未使用药物）'
+  const trimmed = value.trim()
+  if (trimmed.startsWith('（') && trimmed.endsWith('）')) {
+    return trimmed
   }
+  return `（${trimmed}）`
+}
 
-  if (normalizedIntake === '是') {
-    if (!normalizedDetails) {
-      return '已服用药物（具体名称未填写）'
-    }
-    return buildMedicationSchedule(normalizedDetails)
+const ensureValue = (value: string, fallback = '未填写') => (value ? value : fallback)
+
+const formatSampleVolume = (value: string) => {
+  if (!value) {
+    return '未填写'
   }
-
-  const schedule = buildMedicationSchedule(normalizedDetails)
-  return schedule || normalizedDetails
+  const compact = value.replace(/\s+/g, '')
+  if (/ml$/i.test(compact)) {
+    return value
+  }
+  return `${value} ml`
 }
 
 const formMetadataEntries = computed<ReportMetadataItem[]>(() => {
   const intakeValue = sanitizeText(form.medicationIntake)
-  const medicationValue = resolveMedicationValue(form.medicationIntake, form.medicationDetails)
-
   return [
+    { label: '机构名称', value: sanitizeText(form.institutionName) },
+    { label: '报告编号', value: sanitizeText(form.reportNumber) },
+    { label: '检测日期', value: sanitizeText(form.detectionDate) },
+    { label: '样本编号', value: getNormalizedSampleNumber() },
+    { label: '样品量（单位ml）', value: sanitizeText(form.sampleVolume) },
+    { label: '样本状态', value: sanitizeText(form.sampleStatus) },
+    { label: '宠物类型', value: sanitizeText(form.petType) },
+    { label: '癌症标志物', value: sanitizeText(form.cancerBiomarker) },
+    { label: '科别', value: sanitizeText(form.department) },
     { label: '宠物姓名', value: sanitizeText(form.petName) },
     { label: '宠主姓名', value: sanitizeText(form.ownerName) },
     { label: '年龄', value: sanitizeText(form.age) },
     { label: '性别', value: sanitizeText(form.gender) },
     { label: '标本类型', value: sanitizeText(form.sampleType) },
     { label: '一周内是否有药物摄入', value: intakeValue },
-    { label: '药物名称', value: medicationValue },
     { label: '备注', value: sanitizeText(form.notes) }
   ]
 })
@@ -478,16 +674,59 @@ const previewMetadata = computed<ReportMetadataItem[]>(() => {
   }))
 })
 
-const metadataRows = computed(() => {
-  const rows: Array<Array<ReportMetadataItem | null>> = []
-  const items = previewMetadata.value
-  for (let index = 0; index < items.length; index += 2) {
-    rows.push([items[index], items[index + 1] ?? null])
-  }
-  if (!rows.length) {
-    rows.push([null, null])
-  }
-  return rows
+const previewMetadataMap = computed(() => {
+  const map = new Map<string, string>()
+  previewMetadata.value.forEach(item => {
+    if (item) {
+      map.set(item.label, sanitizeText(item.value))
+    }
+  })
+  return map
+})
+
+const getPreviewMetadataValue = (label: string) => previewMetadataMap.value.get(label) ?? ''
+
+const previewNotesDisplay = computed(() => {
+  const value = getPreviewMetadataValue('备注')
+  return value || '无'
+})
+
+const reportNumberDisplay = computed(() => {
+  const value = getPreviewMetadataValue('报告编号')
+  return value ? `[${value}]` : '[未填写]'
+})
+
+const previewInfoRows = computed<PreviewInfoField[][]>(() => {
+  const getValue = (label: string) => getPreviewMetadataValue(label)
+  const detectionDate = formatDateForDisplay(getValue('检测日期'))
+  return [
+    [
+      { label: '送检单位', value: wrapWithParentheses(getValue('机构名称')) },
+      { label: '宠主姓名', value: wrapWithParentheses(getValue('宠主姓名')) },
+      { label: '宠物姓名', value: wrapWithParentheses(getValue('宠物姓名')) },
+      { label: '受检宠物', value: wrapWithParentheses(getValue('宠物类型')) }
+    ],
+    [
+      { label: '送检日期', value: wrapWithParentheses(detectionDate) },
+      { label: '年龄', value: wrapWithParentheses(getValue('年龄')) },
+      { label: '性别', value: wrapWithParentheses(getValue('性别')) },
+      { label: '标本类型', value: wrapWithParentheses(getValue('标本类型')) }
+    ],
+    [
+      { label: '样本编号', value: wrapWithParentheses(getValue('样本编号')) },
+      { label: '样本状态', value: ensureValue(getValue('样本状态')) },
+      { label: '样品量', value: formatSampleVolume(getValue('样品量（单位ml）')) },
+      { label: '癌症标志物', value: wrapWithParentheses(getValue('癌症标志物')) }
+    ],
+    [
+      { label: '科别', value: wrapWithParentheses(getValue('科别')) },
+      {
+        label: '药物摄入情况',
+        value: ensureValue(getValue('一周内是否有药物摄入'))
+      },
+      { label: '备注', value: previewNotesDisplay.value, span: 2 }
+    ]
+  ]
 })
 
 const channelSummaryTexts = computed(() => {
@@ -699,13 +938,21 @@ const runDetection = async () => {
     const response = await postGenerateCtcReport({
       files: selectedFiles.value,
       form: {
+        institutionName: form.institutionName,
+        reportNumber: form.reportNumber,
+        detectionDate: form.detectionDate,
+        sampleNumber: getNormalizedSampleNumber(),
+        sampleVolume: form.sampleVolume,
+        sampleStatus: form.sampleStatus,
+        petType: form.petType,
+        cancerBiomarker: form.cancerBiomarker,
+        department: form.department,
         petName: form.petName,
         ownerName: form.ownerName,
         age: form.age,
         gender: form.gender,
         sampleType: form.sampleType,
         medicationIntake: form.medicationIntake,
-        medicationDetails: form.medicationDetails,
         notes: form.notes
       },
       roundnessThreshold: roundnessThreshold.value,
@@ -825,13 +1072,21 @@ const downloadDocx = async () => {
 }
 
 const resetAll = () => {
+  form.institutionName = ''
+  form.reportNumber = ''
+  form.detectionDate = ''
+  form.sampleNumber = ''
+  form.sampleVolume = ''
+  form.sampleStatus = ''
+  form.petType = ''
+  form.cancerBiomarker = ''
+  form.department = ''
   form.petName = ''
   form.ownerName = ''
   form.gender = ''
   form.age = ''
   form.sampleType = ''
   form.medicationIntake = ''
-  form.medicationDetails = ''
   form.notes = ''
   form.outputDirPath = ''
   resetSelectedFolder()
@@ -1193,45 +1448,12 @@ onBeforeUnmount(() => {
 }
 
 .preview-content {
-  background: #ffffff;
-  border-radius: 14px;
-  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  box-shadow: 0 18px 32px rgba(15, 23, 42, 0.12);
-}
-
-.preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.preview-heading {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.preview-title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: #111827;
-}
-
-.preview-generated-at {
-  margin: 0;
-  font-size: 13px;
-  color: #64748b;
-}
-
-.preview-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  width: 100%;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
 }
 
 .section-title {
@@ -1241,43 +1463,146 @@ onBeforeUnmount(() => {
   color: #1f2937;
 }
 
+.report-preview {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(254, 242, 242, 0.94) 100%);
+  border-radius: 18px;
+  padding: 28px 32px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  box-shadow: 0 18px 36px rgba(185, 28, 28, 0.12);
+  min-height: 100%;
+}
 
-.metadata-table {
+.report-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.report-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.report-title-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  color: #111827;
+  font-size: 20px;
+}
+
+.report-title-brand {
+  font-size: 28px;
+  color: #dc2626;
+  font-family: 'Times New Roman', 'SimSun', serif;
+  letter-spacing: 0.08em;
+}
+
+.report-title-line--secondary {
+  font-size: 18px;
+}
+
+.report-divider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   width: 100%;
-  border-collapse: collapse;
-  border-spacing: 0;
-  background-color: transparent;
 }
 
-.metadata-table tbody tr {
-  background-color: transparent;
+.report-divider-line {
+  display: block;
+  width: 100%;
+  border-radius: 999px;
 }
 
-.metadata-heading,
-.metadata-data {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+.report-divider-line--primary {
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(220, 38, 38, 0) 0%,
+    rgba(220, 38, 38, 0.55) 18%,
+    rgba(220, 38, 38, 0.9) 50%,
+    rgba(220, 38, 38, 0.55) 82%,
+    rgba(220, 38, 38, 0) 100%
+  );
+}
+
+.report-divider-line--secondary {
+  height: 1px;
+  background: rgba(15, 23, 42, 0.18);
+}
+
+.report-number {
+  align-self: flex-end;
   font-size: 14px;
-}
-
-.metadata-heading {
-  width: 18%;
-  color: #1d4ed8;
   font-weight: 600;
-  text-align: right;
-  background-color: transparent;
+  color: #b91c1c;
 }
 
-.metadata-data {
-  color: #0f172a;
+.report-generated-at {
+  align-self: flex-end;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.report-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.report-info-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.report-info-cell {
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 46px;
+  box-shadow: 0 4px 10px rgba(220, 38, 38, 0.08);
+}
+
+.report-info-cell--wide {
+  grid-column: span 2;
+}
+
+.report-info-cell--full {
+  grid-column: span 4;
+}
+
+.report-info-label {
+  font-weight: 600;
+  color: #991b1b;
+  white-space: nowrap;
+}
+
+.report-info-value {
+  color: #111827;
   word-break: break-word;
-  background-color: transparent;
-  white-space: pre-line;
 }
 
-.metadata-table tbody tr:last-child .metadata-heading,
-.metadata-table tbody tr:last-child .metadata-data {
-  border-bottom: none;
+.report-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px dashed rgba(220, 38, 38, 0.3);
+  padding-top: 16px;
 }
 
 .channel-summary-texts {
@@ -1337,6 +1662,20 @@ onBeforeUnmount(() => {
   color: #64748b;
 }
 
+.preview-disclaimer {
+  font-size: 12px;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-disclaimer-line {
+  margin: 0;
+}
+
 .preview-error,
 .preview-warnings {
   margin-top: 16px;
@@ -1371,17 +1710,31 @@ onBeforeUnmount(() => {
     padding: 12px;
   }
 
-  .preview-content {
-    padding: 18px;
+  .report-preview {
+    padding: 24px 20px 28px;
+  }
+
+  .report-info-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .preview-actions {
     justify-content: center;
   }
+}
 
-  .metadata-heading {
-    width: 24%;
-    text-align: left;
+@media (max-width: 600px) {
+  .report-preview {
+    padding: 20px 16px 24px;
+  }
+
+  .report-info-row {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
+  .report-info-cell--wide,
+  .report-info-cell--full {
+    grid-column: span 1;
   }
 }
 </style>

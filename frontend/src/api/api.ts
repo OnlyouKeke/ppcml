@@ -98,6 +98,15 @@ export const getHeartbeat = async (): Promise<HeartbeatResponse> => {
 interface CtcReportPayload {
   files: FileWithRelativePath[]
   form: {
+    institutionName: string
+    reportNumber: string
+    detectionDate: string
+    sampleNumber: string
+    sampleVolume: string
+    sampleStatus: string
+    petType: string
+    cancerBiomarker: string
+    department: string
     petName: string
     ownerName: string
     age: string
@@ -105,7 +114,6 @@ interface CtcReportPayload {
     notes: string
     sampleType?: string
     medicationIntake?: string
-    medicationDetails?: string
   }
   roundnessThreshold?: number
   previewOnly?: boolean
@@ -143,9 +151,17 @@ export const postGenerateCtcReport = async ({
   formData.append('age', form.age || '')
   formData.append('gender', form.gender || '')
   formData.append('notes', form.notes || '')
+  formData.append('institutionName', form.institutionName || '')
+  formData.append('reportNumber', form.reportNumber || '')
+  formData.append('detectionDate', form.detectionDate || '')
+  formData.append('sampleNumber', form.sampleNumber || '')
+  formData.append('sampleVolume', form.sampleVolume || '')
+  formData.append('sampleStatus', form.sampleStatus || '')
+  formData.append('petType', form.petType || '')
+  formData.append('cancerBiomarker', form.cancerBiomarker || '')
+  formData.append('department', form.department || '')
   formData.append('sampleType', form.sampleType || '')
   formData.append('medicationIntake', form.medicationIntake || '')
-  formData.append('medicationDetails', form.medicationDetails || '')
   formData.append('roundnessThreshold', String(roundnessThreshold))
   formData.append('previewOnly', previewOnly ? 'true' : 'false')
   formData.append('outputDirPath', outputDir || '')
