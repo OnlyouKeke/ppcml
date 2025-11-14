@@ -148,19 +148,26 @@
                   multiple
                   @change="handleFolderChange"
                 />
-                <el-button
-                  type="primary"
-                  plain
-                  :disabled="!selectedFiles.length"
-                  :loading="isDetecting"
-                  @click="runDetection"
-                >
-                  {{ isDetecting ? '生成中...' : '生成报告' }}
-                </el-button>
-                <div v-if="selectedFiles.length" class="file-name">
-                  {{ selectedFolderName || '已选文件夹' }}（{{ folderFileCount }} 个文件）
+                <div class="upload-actions">
+                  <el-button type="primary" @click="triggerFolderSelection">
+                    选择影像文件夹
+                  </el-button>
+                  <el-button
+                    type="primary"
+                    plain
+                    :disabled="!selectedFiles.length"
+                    :loading="isDetecting"
+                    @click="runDetection"
+                  >
+                    {{ isDetecting ? '生成中...' : '生成报告' }}
+                  </el-button>
                 </div>
-                <div v-else class="upload-tip">请选择包含五个通道的影像文件夹</div>
+                <div class="upload-status">
+                  <div v-if="selectedFiles.length" class="file-name">
+                    {{ selectedFolderName || '已选文件夹' }}（{{ folderFileCount }} 个文件）
+                  </div>
+                  <div v-else class="upload-tip">请选择包含五个通道的影像文件夹</div>
+                </div>
                 <div class="output-folder-section">
                   <div class="output-folder-selector">
                     <el-input
@@ -216,7 +223,7 @@
                 v-for="option in maskOptions"
                 :key="`preview-${option.id}`"
                 :class="[
-                  'mask-preview-item',
+                  'mask-preview-card',
                   { active: maskSelectionOrderMap.get(option.id) }
                 ]"
                 @click="toggleMaskSelection(option.id)"
@@ -610,6 +617,10 @@ const handleFolderChange = (event: Event) => {
   previewError.value = ''
 }
 
+const triggerFolderSelection = () => {
+  fileInputRef.value?.click()
+}
+
 const triggerOutputFolderSelection = async () => {
   if (!window.electronAPI?.selectDirectory) {
     ElMessage.warning('当前环境不支持系统文件夹选择，请手动输入路径')
@@ -814,3 +825,252 @@ defineExpose({
   resetAll
 })
 </script>
+
+<style scoped>
+.report-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.page-header {
+  text-align: center;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.page-subtitle {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+@media (min-width: 1280px) {
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(360px, 1.1fr) minmax(320px, 0.9fr);
+    grid-auto-rows: min-content;
+    gap: 24px;
+  }
+
+  .form-card {
+    grid-column: 1 / -1;
+  }
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(14, 165, 233, 0.08));
+  border: 1px dashed rgba(79, 70, 229, 0.3);
+}
+
+.upload-input {
+  position: absolute;
+  width: 0.1px;
+  height: 0.1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.upload-status {
+  font-size: 14px;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.upload-tip {
+  color: #64748b;
+}
+
+.output-folder-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.output-folder-input {
+  width: 100%;
+}
+
+.output-folder-tip {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.mask-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mask-options-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mask-preview-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
+.mask-preview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 22px 40px -30px rgba(79, 70, 229, 0.55);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mask-preview-card:hover {
+  transform: translateY(-4px);
+  border-color: #6366f1;
+  box-shadow: 0 26px 46px -30px rgba(79, 70, 229, 0.55);
+}
+
+.mask-preview-card.active {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+}
+
+.mask-preview-image {
+  width: 100%;
+  height: 160px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px dashed rgba(99, 102, 241, 0.4);
+  background: #f8fafc;
+  padding: 8px;
+}
+
+.mask-preview-card.active .mask-preview-image {
+  border-color: #4f46e5;
+  background: rgba(79, 70, 229, 0.08);
+}
+
+.mask-preview-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.mask-selection-order {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+}
+
+.mask-selected-tip {
+  font-size: 13px;
+  color: #475569;
+}
+
+.mask-selection-warning {
+  font-size: 13px;
+  color: #f97316;
+  background: rgba(253, 186, 116, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.preview-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.preview-content {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 32px 60px -38px rgba(15, 23, 42, 0.55);
+}
+
+.channel-preview-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.channel-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.channel-preview-image {
+  width: 100%;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px dashed rgba(148, 163, 184, 0.6);
+  padding: 8px;
+  object-fit: contain;
+}
+
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .preview-content {
+    padding: 16px;
+  }
+
+  .mask-preview-image {
+    height: 140px;
+  }
+}
+</style>
