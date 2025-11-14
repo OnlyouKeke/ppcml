@@ -1031,6 +1031,144 @@ defineExpose({
   box-shadow: 0 32px 60px -38px rgba(15, 23, 42, 0.55);
 }
 
+.report-preview {
+  font-family: "Songti SC", "Songti SC Regular", "SimSun", serif;
+  font-size: 14.67px;
+  line-height: 1.6;
+  color: #1f2937;
+}
+
+.report-preview * {
+  font-family: inherit;
+}
+
+.report-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.report-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.report-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.report-title-brand,
+.report-title-text,
+.report-title-line--secondary {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.report-title-line--secondary {
+  letter-spacing: 0.08em;
+}
+
+.report-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.report-divider-line {
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: #1f2937;
+}
+
+.report-divider-line--primary {
+  height: 2px;
+}
+
+.report-divider-line--secondary {
+  background: #6b7280;
+}
+
+.report-number,
+.report-generated-at,
+.report-info-label,
+.report-info-value,
+.channel-summary-text,
+.channel-preview-label,
+.preview-footer,
+.preview-disclaimer-line {
+  font-size: 14.67px;
+  font-weight: 400;
+}
+
+.report-number {
+  text-align: right;
+}
+
+.report-generated-at {
+  margin-top: 8px;
+}
+
+.report-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.report-info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.report-info-cell {
+  display: flex;
+  min-width: 200px;
+  gap: 4px;
+}
+
+.report-info-cell--wide {
+  flex: 1 1 calc(50% - 16px);
+}
+
+.report-info-cell--full {
+  flex: 1 1 100%;
+}
+
+.report-info-label {
+  font-weight: 500;
+}
+
+.channel-summary-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.channel-preview-label {
+  text-align: center;
+}
+
+.preview-footer {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.preview-disclaimer {
+  margin-top: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .channel-preview-grid {
   display: grid;
   gap: 18px;
