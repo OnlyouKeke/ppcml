@@ -89,6 +89,10 @@ logger = logging.getLogger("ctc_app")
 INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
 MASK_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 
+SONGTI_FONT_NAME = "Songti SC"
+TITLE_FONT_SIZE_PT = 18
+BODY_FONT_SIZE_PT = 11
+
 DISCLAIMER_LINES = [
     "声明：本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。",
     "建议结合兽医临床表现、影像学及其他实验室检查综合判断。",
@@ -229,7 +233,7 @@ def _apply_run_style(run, size: int, bold: bool = False, color: RGBColor | None 
     font = run.font
     font.size = Pt(size)
     font.bold = bold
-    font.name = "SimSun"
+    font.name = SONGTI_FONT_NAME
     if color is not None:
         font.color.rgb = color
 
@@ -238,10 +242,20 @@ def _apply_run_style(run, size: int, bold: bool = False, color: RGBColor | None 
     if r_fonts is None:
         r_fonts = OxmlElement("w:rFonts")
         r_pr.append(r_fonts)
-    r_fonts.set(qn("w:eastAsia"), "SimSun")
+    r_fonts.set(qn("w:ascii"), SONGTI_FONT_NAME)
+    r_fonts.set(qn("w:hAnsi"), SONGTI_FONT_NAME)
+    r_fonts.set(qn("w:eastAsia"), SONGTI_FONT_NAME)
+    r_fonts.set(qn("w:cs"), SONGTI_FONT_NAME)
+    r_fonts.set(qn("w:hint"), "eastAsia")
+
+    latin_font = r_pr.find(qn("w:latin"))
+    if latin_font is None:
+        latin_font = OxmlElement("w:latin")
+        r_pr.append(latin_font)
+    latin_font.set(qn("w:typeface"), SONGTI_FONT_NAME)
 
 
-def _apply_font_size(paragraphs: Iterable, *, size: int = 12) -> None:
+def _apply_font_size(paragraphs: Iterable, *, size: int = BODY_FONT_SIZE_PT) -> None:
     for paragraph in paragraphs:
         for run in paragraph.runs:
             _apply_run_style(run, size)
@@ -260,7 +274,7 @@ def _set_cell_text(
     lines = text.splitlines() or [""]
     for index, line in enumerate(lines):
         run = paragraph.add_run(line)
-        _apply_run_style(run, 12, bold=bold, color=color)
+        _apply_run_style(run, BODY_FONT_SIZE_PT, bold=bold, color=color)
         if index < len(lines) - 1:
             run.add_break()
     paragraph.paragraph_format.space_after = Pt(0)
@@ -288,9 +302,9 @@ def _set_label_value_cell(
     cell.text = ""
     paragraph = cell.paragraphs[0]
     label_run = paragraph.add_run(f"{label}：")
-    _apply_run_style(label_run, 12, bold=True, color=label_color)
+    _apply_run_style(label_run, BODY_FONT_SIZE_PT, bold=True, color=label_color)
     value_run = paragraph.add_run(value)
-    _apply_run_style(value_run, 12, color=value_color)
+    _apply_run_style(value_run, BODY_FONT_SIZE_PT, color=value_color)
     paragraph.paragraph_format.space_after = Pt(0)
 
 
@@ -447,22 +461,14 @@ def _build_report_document(
     title_paragraph = document.add_paragraph()
     title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     brand_run = title_paragraph.add_run("FlowCanis ")
-    _apply_run_style(brand_run, 28, bold=True, color=RGBColor(0, 0, 0))  # 改为黑色
-    brand_rpr = brand_run._element.get_or_add_rPr()
-    brand_fonts = brand_rpr.rFonts
-    if brand_fonts is None:
-        brand_fonts = OxmlElement("w:rFonts")
-        brand_rpr.append(brand_fonts)
-    brand_fonts.set(qn("w:ascii"), "Times New Roman")
-    brand_fonts.set(qn("w:hAnsi"), "Times New Roman")
-    brand_fonts.set(qn("w:cs"), "Times New Roman")
+    _apply_run_style(brand_run, TITLE_FONT_SIZE_PT, bold=True, color=RGBColor(0, 0, 0))
     main_title_run = title_paragraph.add_run("微流控循环肿瘤细胞分选")
-    _apply_run_style(main_title_run, 24, bold=True, color=RGBColor(31, 41, 55))
+    _apply_run_style(main_title_run, TITLE_FONT_SIZE_PT, bold=True, color=RGBColor(31, 41, 55))
 
     subtitle_paragraph = document.add_paragraph()
     subtitle_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     subtitle_run = subtitle_paragraph.add_run("与免疫荧光识别检测报告单")
-    _apply_run_style(subtitle_run, 20, bold=True, color=RGBColor(31, 41, 55))
+    _apply_run_style(subtitle_run, TITLE_FONT_SIZE_PT, bold=True, color=RGBColor(31, 41, 55))
 
     divider_paragraph = document.add_paragraph()
     divider_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -476,7 +482,7 @@ def _build_report_document(
     report_number_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     report_number_text = _ensure_value(metadata.get("报告编号") if metadata else None, "未填写")
     report_number_run = report_number_paragraph.add_run(f"编号：[{report_number_text}]")
-    _apply_run_style(report_number_run, 12, bold=True, color=RGBColor(0, 0, 0))  # 改为黑色
+    _apply_run_style(report_number_run, BODY_FONT_SIZE_PT, bold=True, color=RGBColor(0, 0, 0))  # 改为黑色
     report_number_paragraph.paragraph_format.space_after = Pt(12)
 
     if metadata:
@@ -528,7 +534,7 @@ def _build_report_document(
         for line in info_lines:
             paragraph = document.add_paragraph()
             run = paragraph.add_run(line)
-            _apply_run_style(run, 12, color=RGBColor(31, 41, 55))
+            _apply_run_style(run, BODY_FONT_SIZE_PT, color=RGBColor(31, 41, 55))
             paragraph.paragraph_format.space_after = Pt(0)
             info_paragraphs.append(paragraph)
 
@@ -551,7 +557,7 @@ def _build_report_document(
 
     selection_paragraph = document.add_paragraph()
     selection_run = selection_paragraph.add_run("选三张不同荧光同一区域的照片，有方框标出是CTC。")
-    _apply_run_style(selection_run, 12, color=RGBColor(55, 65, 81))
+    _apply_run_style(selection_run, BODY_FONT_SIZE_PT, color=RGBColor(55, 65, 81))
 
     ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
     if ctc_image_sets:
@@ -563,7 +569,7 @@ def _build_report_document(
             summary_paragraph = document.add_paragraph()
             summary_paragraph.paragraph_format.space_after = Pt(2)
             summary_run = summary_paragraph.add_run(summary_text)
-            _apply_run_style(summary_run, 10, color=RGBColor(55, 65, 81))
+            _apply_run_style(summary_run, BODY_FONT_SIZE_PT, color=RGBColor(55, 65, 81))
 
         def _resolve_preview_path(primary_key: str, *fallback_keys: str) -> str | None:
             keys = (primary_key,) + fallback_keys
@@ -636,7 +642,7 @@ def _build_report_document(
     else:
         no_image_paragraph = document.add_paragraph()
         no_image_run = no_image_paragraph.add_run("当前未检测到可用于展示的CTC图像。")
-        _apply_run_style(no_image_run, 12, color=RGBColor(107, 114, 128))
+        _apply_run_style(no_image_run, BODY_FONT_SIZE_PT, color=RGBColor(107, 114, 128))
 
     result_text = (
         f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
@@ -645,29 +651,29 @@ def _build_report_document(
     )
     result_paragraph = document.add_paragraph()
     result_run = result_paragraph.add_run(result_text)
-    _apply_run_style(result_run, 12, color=RGBColor(0, 0, 0) if doc_names else RGBColor(107, 114, 128))  # 改为黑色
+    _apply_run_style(result_run, BODY_FONT_SIZE_PT, color=RGBColor(0, 0, 0) if doc_names else RGBColor(107, 114, 128))  # 改为黑色
 
     biomarker_value = (metadata.get("癌症标志物") or "").strip()
     biomarker_text = biomarker_value if biomarker_value else "______________"
     biomarker_paragraph = document.add_paragraph()
     biomarker_run = biomarker_paragraph.add_run(f"癌症标志物：{biomarker_text}")
-    _apply_run_style(biomarker_run, 12, color=RGBColor(30, 64, 45))
+    _apply_run_style(biomarker_run, BODY_FONT_SIZE_PT, color=RGBColor(30, 64, 45))
 
     notes_value = (metadata.get("备注") or "").strip()
     if notes_value:
         notes_paragraph = document.add_paragraph()
         notes_run = notes_paragraph.add_run(f"备注：{notes_value}")
-        _apply_run_style(notes_run, 12, color=RGBColor(30, 64, 45))
+        _apply_run_style(notes_run, BODY_FONT_SIZE_PT, color=RGBColor(30, 64, 45))
 
     separator = document.add_paragraph()
     separator_run = separator.add_run("--------------------------------------------------------------------")
-    _apply_run_style(separator_run, 12, color=RGBColor(75, 85, 99))
+    _apply_run_style(separator_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
 
     footer = document.add_paragraph()
     footer_run = footer.add_run("检测人：___________    审核人：___________    报告日期：___________")
-    _apply_run_style(footer_run, 12, color=RGBColor(75, 85, 99))
+    _apply_run_style(footer_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
     footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     for index, line in enumerate(DISCLAIMER_LINES):
@@ -676,7 +682,7 @@ def _build_report_document(
         disclaimer_paragraph.paragraph_format.space_after = Pt(0)
         disclaimer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         disclaimer_run = disclaimer_paragraph.add_run(line)
-        _apply_run_style(disclaimer_run, 10, color=RGBColor(107, 114, 128))
+        _apply_run_style(disclaimer_run, BODY_FONT_SIZE_PT, color=RGBColor(107, 114, 128))
 
     document.save(output_path)
 
