@@ -371,6 +371,21 @@ def _wrap_parentheses(value: str | None) -> str:
     return f"（{normalized}）"
 
 
+def _wrap_ascii_parentheses(value: str | None, *, fallback: str = "未填写") -> str:
+    normalized = _ensure_value(value, fallback)
+    return f"({normalized})"
+
+
+def _format_checkbox_line(label: str, value: str | None, options: list[str]) -> str:
+    normalized_value = _ensure_value(value, "").strip()
+    formatted_options: list[str] = []
+    for option in options:
+        mark = "√" if normalized_value == option else "¨"
+        formatted_options.append(f"{option}{mark}")
+    options_text = " ".join(formatted_options) if formatted_options else ""
+    return f"{label}:  {options_text}".rstrip()
+
+
 def _ensure_value(value: str | None, fallback: str = "未填写") -> str:
     if not value:
         return fallback
@@ -466,66 +481,59 @@ def _build_report_document(
 
     if metadata:
         detection_date = _format_report_date(metadata.get("检测日期"))
-        # 按照新顺序调整字段
-        info_layout = [
+        first_line = "   ".join(
             [
-                {"label": "宠主姓名", "value": _wrap_parentheses(metadata.get("宠主姓名"))},
-                {"label": "宠物姓名", "value": _wrap_parentheses(metadata.get("宠物姓名"))},
-                {"label": "性别", "value": _wrap_parentheses(metadata.get("性别"))},
-                {"label": "宠物类型", "value": _wrap_parentheses(metadata.get("宠物类型"))},
-            ],
-            [
-                {"label": "年龄", "value": _wrap_parentheses(metadata.get("年龄"))},
-                {"label": "送检单位", "value": _wrap_parentheses(metadata.get("机构名称"))},
-                {"label": "送检时间", "value": _wrap_parentheses(detection_date)},
-                {"label": "科别", "value": _wrap_parentheses(metadata.get("科别"))},
-            ],
-            [
-                {"label": "癌症标志物", "value": _wrap_parentheses(metadata.get("癌症标志物"))},
-                {"label": "样本类型", "value": _wrap_parentheses(metadata.get("标本类型"))},
-                {"label": "样品量", "value": _format_sample_volume(metadata.get("样品量（单位ml）"))},
-                {"label": "样本编号", "value": _wrap_parentheses(metadata.get("样本编号"))},
-            ],
-            [
-                {"label": "样本状态", "value": _ensure_value(metadata.get("样本状态"))},
-                {
-                    "label": "一周内是否有药物摄入",
-                    "value": _ensure_value(metadata.get("一周内是否有药物摄入")),
-                },
-                {"label": "如有，请说明", "value": _ensure_value(metadata.get("备注"), "无"), "span": 2},
-            ],
-        ]
+                f"宠主姓名: {_wrap_ascii_parentheses(metadata.get('宠主姓名'))}",
+                f"宠物姓名: {_wrap_ascii_parentheses(metadata.get('宠物姓名'))}",
+                f"性别: {_wrap_ascii_parentheses(metadata.get('性别'))}",
+                f"宠物类型: {_wrap_ascii_parentheses(metadata.get('宠物类型'))}",
+            ]
+        )
 
-        info_table = document.add_table(rows=len(info_layout), cols=4)
-        info_table.autofit = True
-        info_table.style = "Table Grid"
+        second_line = "   ".join(
+            [
+                f"年龄: {_wrap_ascii_parentheses(metadata.get('年龄'))}",
+                f"送检单位: {_wrap_ascii_parentheses(metadata.get('机构名称'))}",
+                f"送检时间: {_wrap_ascii_parentheses(detection_date or None)}",
+                f"科别: {_wrap_ascii_parentheses(metadata.get('科别'))}",
+            ]
+        )
 
-        for row_index, fields in enumerate(info_layout):
-            column_index = 0
-            for field in fields:
-                label = field["label"]
-                value = field["value"]
-                span = field.get("span", 1)
-                cell = info_table.cell(row_index, column_index)
-                _set_label_value_cell(
-                    cell,
-                    label,
-                    value,
-                    label_color=RGBColor(0, 0, 0),  # 改为黑色
-                    value_color=RGBColor(31, 41, 55),
-                )
-                if span > 1:
-                    merged_cell = cell
-                    for offset in range(1, span):
-                        merged_cell = merged_cell.merge(info_table.cell(row_index, column_index + offset))
-                    column_index += span
-                else:
-                    column_index += 1
+        formatted_sample_volume = _format_sample_volume(metadata.get("样品量（单位ml）"))
+        if formatted_sample_volume != "未填写":
+            formatted_sample_volume = formatted_sample_volume.replace(" ", "").upper()
 
-            while column_index < 4:
-                empty_cell = info_table.cell(row_index, column_index)
-                _set_cell_text(empty_cell, "", color=RGBColor(31, 41, 55))
-                column_index += 1
+        third_line = "   ".join(
+            [
+                f"癌症标志物: {_wrap_ascii_parentheses(metadata.get('癌症标志物'))}",
+                f"样本类型: {_wrap_ascii_parentheses(metadata.get('标本类型'))}",
+                f"样品量: {_wrap_ascii_parentheses(formatted_sample_volume)}",
+                f"样本编号: {_wrap_ascii_parentheses(metadata.get('样本编号'))}",
+            ]
+        )
+
+        status_line = _format_checkbox_line("样本状态", metadata.get("样本状态"), ["合格", "不合格"])
+        medication_line = _format_checkbox_line(
+            "一周内是否有药物摄入",
+            metadata.get("一周内是否有药物摄入"),
+            ["有", "无"],
+        )
+        fourth_line = f"{status_line}   {medication_line}".rstrip()
+
+        fifth_line = f"如有，请说明: {_wrap_ascii_parentheses(metadata.get('备注'), fallback='无')}"
+
+        info_lines = [first_line, second_line, third_line, fourth_line, fifth_line]
+
+        info_paragraphs = []
+        for line in info_lines:
+            paragraph = document.add_paragraph()
+            run = paragraph.add_run(line)
+            _apply_run_style(run, 12, color=RGBColor(31, 41, 55))
+            paragraph.paragraph_format.space_after = Pt(0)
+            info_paragraphs.append(paragraph)
+
+        if info_paragraphs:
+            info_paragraphs[-1].paragraph_format.space_after = Pt(6)
 
 
     result_heading = document.add_paragraph()
