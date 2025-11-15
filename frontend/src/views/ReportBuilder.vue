@@ -424,7 +424,11 @@ interface PreviewDetailField {
 }
 
 const requiredMaskSelectionCount = 3
-const sampleNumberMaxLength = 32
+const sampleNumberMaxLength = 10
+const reportNumberMaxLength = 9
+
+const normalizeIdentifier = (value: string, maxLength: number) =>
+  (value ?? '').toString().trim().toUpperCase().slice(0, maxLength)
 
 const fileInputRef = ref<HTMLInputElement>()
 const selectedFiles = ref<FileWithRelativePath[]>([])
@@ -652,22 +656,16 @@ const resetMaskSelection = () => {
   maskSelectionOrderMap.value = new Map<string, number>()
 }
 
-const assignSampleNumber = (value: string) => {
-  const previousSampleNumber = form.sampleNumber
-  const normalized = (value ?? '').toString().trim().toUpperCase()
-  const truncated = normalized.slice(0, sampleNumberMaxLength)
-  form.sampleNumber = truncated
-  if (!form.reportNumber || form.reportNumber === previousSampleNumber) {
-    form.reportNumber = truncated
+const assignSampleNumber = (sampleValue: string, reportValue?: string) => {
+  form.sampleNumber = normalizeIdentifier(sampleValue, sampleNumberMaxLength)
+  if (reportValue !== undefined) {
+    form.reportNumber = normalizeIdentifier(reportValue, reportNumberMaxLength)
   }
 }
 
 const clearSampleNumber = () => {
-  const previousSampleNumber = form.sampleNumber
   form.sampleNumber = ''
-  if (!form.reportNumber || form.reportNumber === previousSampleNumber) {
-    form.reportNumber = ''
-  }
+  form.reportNumber = ''
 }
 
 const resolveFolderName = (files: FileWithRelativePath[]) => {
@@ -747,18 +745,19 @@ watch(
     const requestToken = Symbol('sample-number-request')
     latestSampleNumberRequest.value = requestToken
     const previousSampleNumber = form.sampleNumber
+    const previousReportNumber = form.reportNumber
 
     try {
       const response = await getNextSampleNumber(normalizedNew)
       if (latestSampleNumberRequest.value !== requestToken) {
         return
       }
-      assignSampleNumber(response.sampleNumber)
+      assignSampleNumber(response.sampleNumber, response.reportNumber)
     } catch (error) {
       if (latestSampleNumberRequest.value !== requestToken) {
         return
       }
-      assignSampleNumber(previousSampleNumber)
+      assignSampleNumber(previousSampleNumber, previousReportNumber)
       const message = extractErrorMessage(error)
       ElMessage.error(message || '无法生成样本编号')
     } finally {
@@ -829,8 +828,10 @@ const runDetection = async () => {
     })
 
     reportData.value = response
-    if (response.generatedSampleNumber) {
-      assignSampleNumber(response.generatedSampleNumber)
+    if (response.generatedSampleNumber || response.generatedReportNumber) {
+      const nextSampleNumber = response.generatedSampleNumber ?? form.sampleNumber
+      const nextReportNumber = response.generatedReportNumber ?? form.reportNumber
+      assignSampleNumber(nextSampleNumber, nextReportNumber)
     }
     reportToken.value = response.reportToken ?? ''
     previewWarnings.value = response.warnings ?? []

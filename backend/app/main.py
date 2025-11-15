@@ -94,11 +94,24 @@ SONGTI_FONT_NAME = "SimSun"
 TITLE_FONT_SIZE_PT = 18
 BODY_FONT_SIZE_PT = 11
 
-SAMPLE_NUMBER_PREFIX = "PE"
 SAMPLE_NUMBER_STORAGE_DIR = Path(__file__).resolve().parent.parent / "var"
 SAMPLE_NUMBER_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLE_NUMBER_STORAGE_PATH = SAMPLE_NUMBER_STORAGE_DIR / "sample_number_sequence.json"
+REPORT_NUMBER_STORAGE_PATH = SAMPLE_NUMBER_STORAGE_DIR / "report_number_sequence.json"
+
 SAMPLE_NUMBER_LOCK = threading.Lock()
+REPORT_NUMBER_LOCK = threading.Lock()
+
+SAMPLE_NUMBER_DIGITS = 7
+REPORT_NUMBER_PREFIX = "PE"
+
+CAT_ALIASES = {"猫", "貓", "cat"}
+DOG_ALIASES = {"狗", "犬", "dog"}
+OTHER_ALIASES = {"other", "others", "其他", "其它"}
+CAT_ALIAS_KEYS = {alias.casefold() for alias in CAT_ALIASES}
+DOG_ALIAS_KEYS = {alias.casefold() for alias in DOG_ALIASES}
+OTHER_ALIAS_KEYS = {alias.casefold() for alias in OTHER_ALIASES}
+DEFAULT_SAMPLE_NUMBER_PREFIX = "OTH"
 
 DISCLAIMER_LINES = [
     "声明：本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。",
@@ -112,18 +125,31 @@ def _normalize_pet_type(value: str | None) -> str:
     return value.strip()
 
 
-def _resolve_sample_number_prefix(_: str | None) -> str:
-    return SAMPLE_NUMBER_PREFIX
+def _resolve_sample_number_prefix(pet_type: str | None) -> str:
+    if not pet_type:
+        return DEFAULT_SAMPLE_NUMBER_PREFIX
+
+    normalized = pet_type.strip().casefold()
+    if not normalized:
+        return DEFAULT_SAMPLE_NUMBER_PREFIX
+
+    if normalized in CAT_ALIAS_KEYS:
+        return "CAT"
+    if normalized in DOG_ALIAS_KEYS:
+        return "DOG"
+    if normalized in OTHER_ALIAS_KEYS:
+        return DEFAULT_SAMPLE_NUMBER_PREFIX
+    return DEFAULT_SAMPLE_NUMBER_PREFIX
 
 
-def _load_sample_number_counters() -> dict[str, int]:
-    if not SAMPLE_NUMBER_STORAGE_PATH.exists():
+def _load_number_counters(storage_path: Path, description: str) -> dict[str, int]:
+    if not storage_path.exists():
         return {}
     try:
-        with SAMPLE_NUMBER_STORAGE_PATH.open("r", encoding="utf-8") as file_obj:
+        with storage_path.open("r", encoding="utf-8") as file_obj:
             data = json.load(file_obj)
     except (OSError, json.JSONDecodeError):
-        logger.warning("无法读取样本编号序列文件，将重新初始化。")
+        logger.warning("无法读取%s序列文件，将重新初始化：%s", description, storage_path)
         return {}
 
     counters: dict[str, int] = {}
@@ -132,39 +158,95 @@ def _load_sample_number_counters() -> dict[str, int]:
             try:
                 counters[str(prefix)] = int(value)
             except (TypeError, ValueError):
-                logger.debug("忽略无效的样本编号序列值：prefix=%s value=%s", prefix, value)
+                logger.debug("忽略无效的%s序列值：prefix=%s value=%s", description, prefix, value)
                 continue
     return counters
 
 
-def _save_sample_number_counters(counters: Mapping[str, int]) -> None:
+def _save_number_counters(
+    storage_path: Path, counters: Mapping[str, int], description: str
+) -> None:
     try:
-        with SAMPLE_NUMBER_STORAGE_PATH.open("w", encoding="utf-8") as file_obj:
+        with storage_path.open("w", encoding="utf-8") as file_obj:
             json.dump(counters, file_obj, ensure_ascii=False, indent=2)
     except OSError:
-        logger.exception("保存样本编号序列文件失败：%s", SAMPLE_NUMBER_STORAGE_PATH)
+        logger.exception("保存%s序列文件失败：%s", description, storage_path)
+
+
+def _generate_next_counter_value(
+    prefix: str,
+    *,
+    storage_path: Path,
+    lock: threading.Lock,
+    description: str,
+) -> int:
+    with lock:
+        counters = _load_number_counters(storage_path, description)
+        next_value = counters.get(prefix, -1) + 1
+        counters[prefix] = next_value
+        _save_number_counters(storage_path, counters, description)
+    return next_value
+
+
+def _sync_counter_value(
+    prefix: str,
+    numeric_value: int,
+    *,
+    storage_path: Path,
+    lock: threading.Lock,
+    description: str,
+) -> None:
+    with lock:
+        counters = _load_number_counters(storage_path, description)
+        current_max = counters.get(prefix, -1)
+        if numeric_value > current_max:
+            counters[prefix] = numeric_value
+            _save_number_counters(storage_path, counters, description)
 
 
 def _generate_next_sample_number(pet_type: str | None) -> str:
     prefix = _resolve_sample_number_prefix(pet_type)
-    with SAMPLE_NUMBER_LOCK:
-        counters = _load_sample_number_counters()
-        next_value = counters.get(prefix, -1) + 1
-        counters[prefix] = next_value
-        _save_sample_number_counters(counters)
-
-    sample_number = f"{prefix}{next_value:07d}"
+    next_value = _generate_next_counter_value(
+        prefix,
+        storage_path=SAMPLE_NUMBER_STORAGE_PATH,
+        lock=SAMPLE_NUMBER_LOCK,
+        description="样本编号",
+    )
+    sample_number = f"{prefix}{next_value:0{SAMPLE_NUMBER_DIGITS}d}"
     logger.info("生成样本编号：%s（宠物类型=%s）", sample_number, pet_type or "未填写")
     return sample_number
 
 
 def _sync_sample_number_counter(prefix: str, numeric_value: int) -> None:
-    with SAMPLE_NUMBER_LOCK:
-        counters = _load_sample_number_counters()
-        current_max = counters.get(prefix, 0)
-        if numeric_value > current_max:
-            counters[prefix] = numeric_value
-            _save_sample_number_counters(counters)
+    _sync_counter_value(
+        prefix,
+        numeric_value,
+        storage_path=SAMPLE_NUMBER_STORAGE_PATH,
+        lock=SAMPLE_NUMBER_LOCK,
+        description="样本编号",
+    )
+
+
+def _generate_next_report_number() -> str:
+    next_value = _generate_next_counter_value(
+        REPORT_NUMBER_PREFIX,
+        storage_path=REPORT_NUMBER_STORAGE_PATH,
+        lock=REPORT_NUMBER_LOCK,
+        description="报告编号",
+    )
+    report_number = f"{REPORT_NUMBER_PREFIX}{next_value:0{SAMPLE_NUMBER_DIGITS}d}"
+    logger.info("生成报告编号：%s", report_number)
+    return report_number
+
+
+def _sync_report_number_counter(numeric_value: int) -> None:
+    _sync_counter_value(
+        REPORT_NUMBER_PREFIX,
+        numeric_value,
+        storage_path=REPORT_NUMBER_STORAGE_PATH,
+        lock=REPORT_NUMBER_LOCK,
+        description="报告编号",
+    )
 
 
 def verify_startup_token() -> None:
@@ -258,6 +340,7 @@ def _create_metadata_entries(
     entries["年龄"] = _normalize_field(age)
     entries["机构名称"] = _normalize_field(institution_name)
     entries["检测日期"] = _normalize_field(detection_date)
+    entries["报告编号"] = _normalize_field(report_number).upper()
     entries["科别"] = _normalize_field(department)
     entries["癌症标志物"] = _normalize_field(cancer_biomarker)
     entries["标本类型"] = _normalize_field(sample_type)
@@ -1233,12 +1316,17 @@ async def fetch_next_sample_number(
     normalized_pet_type = _normalize_pet_type(pet_type)
 
     sample_number_value = _generate_next_sample_number(normalized_pet_type)
+    report_number_value = _generate_next_report_number()
     logger.info(
-        "通过接口生成样本编号：%s（宠物类型=%s）",
+        "通过接口生成样本编号：%s，报告编号：%s（宠物类型=%s）",
         sample_number_value,
+        report_number_value,
         normalized_pet_type,
     )
-    return {"sampleNumber": sample_number_value}
+    return {
+        "sampleNumber": sample_number_value,
+        "reportNumber": report_number_value,
+    }
 
 
 @app.post("/ctc/report")
@@ -1339,9 +1427,24 @@ async def generate_ctc_report(
             sanitized_sample_number = _generate_next_sample_number(normalized_pet_type_value)
             generated_sample_number = sanitized_sample_number
 
-        normalized_report_number = (report_number or "").strip()
-        if not normalized_report_number:
-            normalized_report_number = sanitized_sample_number
+        normalized_report_number_input = (report_number or "").strip().upper()
+        normalized_report_number = normalized_report_number_input
+        generated_report_number = ""
+        if normalized_report_number_input:
+            if normalized_report_number_input.startswith(REPORT_NUMBER_PREFIX):
+                numeric_part = normalized_report_number_input[len(REPORT_NUMBER_PREFIX):]
+                if numeric_part.isdigit() and len(numeric_part) == SAMPLE_NUMBER_DIGITS:
+                    _sync_report_number_counter(int(numeric_part))
+                    normalized_report_number = f"{REPORT_NUMBER_PREFIX}{numeric_part}"
+                else:
+                    normalized_report_number = _generate_next_report_number()
+                    generated_report_number = normalized_report_number
+            else:
+                normalized_report_number = _generate_next_report_number()
+                generated_report_number = normalized_report_number
+        else:
+            normalized_report_number = _generate_next_report_number()
+            generated_report_number = normalized_report_number
 
         metadata = _create_metadata_entries(
             institution_name,
@@ -1366,6 +1469,7 @@ async def generate_ctc_report(
             {key: metadata[key] for key in metadata},
         )
         auto_generated_sample_number = bool(generated_sample_number)
+        auto_generated_report_number = bool(generated_report_number)
 
         report_path = output_dir / "ctc_report.docx"
         channel_summary_texts = _format_channel_summary_texts(analyzer)
@@ -1570,6 +1674,8 @@ async def generate_ctc_report(
             "maskInputDirectory": str(mask_input_dir) if mask_input_dir else "",
             "generatedSampleNumber": sanitized_sample_number,
             "autoGeneratedSampleNumber": auto_generated_sample_number,
+            "generatedReportNumber": normalized_report_number,
+            "autoGeneratedReportNumber": auto_generated_report_number,
         }
         (output_dir / "report_state.json").write_text(
             json.dumps(state_payload, ensure_ascii=False, indent=2),
@@ -1599,6 +1705,8 @@ async def generate_ctc_report(
             "warnings": warnings,
             "generatedSampleNumber": sanitized_sample_number,
             "autoGeneratedSampleNumber": auto_generated_sample_number,
+            "generatedReportNumber": normalized_report_number,
+            "autoGeneratedReportNumber": auto_generated_report_number,
         }
 
         if not preview_only_flag:
