@@ -288,23 +288,34 @@
                   生成时间：{{ formatGeneratedAt(reportData.generatedAt) }}
                 </div>
                 <section class="report-info">
+                  <div class="report-info-divider" />
                   <div
-                    v-for="(row, rowIndex) in previewInfoRows"
-                    :key="rowIndex"
-                    class="report-info-row"
+                    v-for="(line, lineIndex) in previewInfoLines"
+                    :key="lineIndex"
+                    class="report-info-line"
                   >
                     <div
-                      v-for="(field, fieldIndex) in row"
+                      v-for="(field, fieldIndex) in line"
                       :key="fieldIndex"
-                      class="report-info-cell"
-                      :class="{
-                        'report-info-cell--wide': field.span === 2,
-                        'report-info-cell--full': field.span === 4
-                      }"
+                      class="report-info-field"
                     >
                       <span class="report-info-label">{{ field.label }}：</span>
                       <span class="report-info-value">{{ field.value }}</span>
                     </div>
+                  </div>
+                  <div class="report-info-divider" />
+                </section>
+                <section
+                  v-if="previewDetailFields.length"
+                  class="report-info-details"
+                >
+                  <div
+                    v-for="(field, fieldIndex) in previewDetailFields"
+                    :key="fieldIndex"
+                    class="report-info-detail"
+                  >
+                    <span class="report-info-label">{{ field.label }}：</span>
+                    <span class="report-info-value">{{ field.value }}</span>
                   </div>
                 </section>
                 <section v-if="channelPreviewItems.length" class="report-section">
@@ -400,15 +411,19 @@ import type {
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
-interface PreviewField {
-  label: string
-  value: string
-  span: number
-}
-
 interface ChannelPreviewItem {
   label: string
   src: string
+}
+
+interface PreviewLineField {
+  label: string
+  value: string
+}
+
+interface PreviewDetailField {
+  label: string
+  value: string
 }
 
 const requiredMaskSelectionCount = 3
@@ -481,76 +496,113 @@ const channelSummaryTexts = computed(
   () => reportData.value?.channelSummaryTexts ?? []
 )
 
-const metadataSpanOverrides = new Map<string, number>([['备注', 4]])
-
 const normalizeMetadataValue = (item: ReportMetadataItem) => {
   const value = (item.value ?? '').toString().trim()
   return value || '未填写'
 }
 
-const previewInfoRows = computed(() => {
+const formatReportDate = (value: string) => {
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === '未填写') {
+    return trimmed || '未填写'
+  }
+
+  const match = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (!match) {
+    return trimmed
+  }
+
+  const [, year, month, day] = match
+  return `${year}年${Number(month)}月${Number(day)}日`
+}
+
+const previewInfoLines = computed<PreviewLineField[][]>(() => {
   if (!reportData.value) {
     return []
   }
 
-  const fields: PreviewField[] = []
-
+  const metadataMap = new Map<string, string>()
   for (const item of reportData.value.metadata ?? []) {
-    const span = metadataSpanOverrides.get(item.label) ?? 2
-    fields.push({
-      label: item.label,
-      value: normalizeMetadataValue(item),
-      span
-    })
+    metadataMap.set(item.label, normalizeMetadataValue(item))
   }
+
+  const ensureValue = (label: string, fallback = '未填写') => {
+    const rawValue = metadataMap.get(label) ?? ''
+    const normalized = rawValue.trim()
+    if (!normalized || normalized === '未填写') {
+      return fallback
+    }
+    return normalized
+  }
+
+  const sampleVolumeRaw = metadataMap.get('样品量（单位ml）')?.trim() ?? ''
+  const sampleVolumeValue = sampleVolumeRaw
+    ? sampleVolumeRaw.replace(/\s+/g, '').toUpperCase()
+    : '未填写'
+
+  const remarkRaw = metadataMap.get('备注')?.trim() ?? ''
+  const remarkValue = !remarkRaw || remarkRaw === '未填写' ? '无' : remarkRaw
+
+  const detectionDateRaw = metadataMap.get('检测日期')?.trim() ?? ''
+  const detectionDateValue =
+    !detectionDateRaw || detectionDateRaw === '未填写'
+      ? '未填写'
+      : formatReportDate(detectionDateRaw)
+
+  return [
+    [
+      { label: '宠主姓名', value: ensureValue('宠主姓名') },
+      { label: '宠物姓名', value: ensureValue('宠物姓名') },
+      { label: '性别', value: ensureValue('性别') },
+      { label: '宠物类型', value: ensureValue('宠物类型') },
+      { label: '年龄', value: ensureValue('年龄') },
+      { label: '送检单位', value: ensureValue('机构名称') }
+    ],
+    [
+      { label: '送检时间', value: detectionDateValue },
+      { label: '科别', value: ensureValue('科别') },
+      { label: '癌症标志物', value: ensureValue('癌症标志物') }
+    ],
+    [
+      { label: '样本类型', value: ensureValue('标本类型') },
+      { label: '样品量', value: sampleVolumeValue },
+      { label: '样本编号', value: ensureValue('样本编号') },
+      { label: '样本状态', value: ensureValue('样本状态') }
+    ],
+    [
+      { label: '一周内是否有药物摄入', value: ensureValue('一周内是否有药物摄入') },
+      { label: '如有，请说明', value: remarkValue }
+    ]
+  ]
+})
+
+const previewDetailFields = computed<PreviewDetailField[]>(() => {
+  if (!reportData.value) {
+    return []
+  }
+
+  const fields: PreviewDetailField[] = []
 
   if (reportData.value.totals) {
     fields.push({
       label: '统计汇总',
-      value: `CTC ${reportData.value.totals.totalCtc} / WBC ${reportData.value.totals.totalWbc}`,
-      span: 4
+      value: `CTC ${reportData.value.totals.totalCtc} / WBC ${reportData.value.totals.totalWbc}`
     })
   }
 
   if (reportData.value.resultText) {
-    fields.push({ label: '结果说明', value: reportData.value.resultText, span: 4 })
+    fields.push({ label: '结果说明', value: reportData.value.resultText })
   }
 
   if (reportData.value.selectionText) {
-    fields.push({ label: '掩码选择说明', value: reportData.value.selectionText, span: 4 })
+    fields.push({ label: '掩码选择说明', value: reportData.value.selectionText })
   }
 
   if (reportData.value.remarkText) {
-    fields.push({ label: '备注', value: reportData.value.remarkText, span: 4 })
+    fields.push({ label: '备注', value: reportData.value.remarkText })
   }
 
-  const rows: PreviewField[][] = []
-  let currentRow: PreviewField[] = []
-  let spanTotal = 0
-
-  for (const field of fields) {
-    const span = Math.min(Math.max(field.span, 1), 4)
-    if (spanTotal + span > 4) {
-      rows.push(currentRow)
-      currentRow = []
-      spanTotal = 0
-    }
-
-    currentRow.push({ ...field, span })
-    spanTotal += span
-
-    if (spanTotal >= 4) {
-      rows.push(currentRow)
-      currentRow = []
-      spanTotal = 0
-    }
-  }
-
-  if (currentRow.length) {
-    rows.push(currentRow)
-  }
-
-  return rows
+  return fields
 })
 
 const reportNumberDisplay = computed(() => {
@@ -1116,6 +1168,7 @@ defineExpose({
   margin-top: 8px;
 }
 
+
 .report-info {
   display: flex;
   flex-direction: column;
@@ -1123,24 +1176,34 @@ defineExpose({
   margin-top: 12px;
 }
 
-.report-info-row {
+.report-info-divider {
+  width: 100%;
+  height: 1px;
+  background: #000;
+}
+
+.report-info-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px 16px;
+  gap: 8px 16px;
 }
 
-.report-info-cell {
+.report-info-field {
   display: flex;
-  min-width: 200px;
   gap: 4px;
+  white-space: nowrap;
 }
 
-.report-info-cell--wide {
-  flex: 1 1 calc(50% - 16px);
+.report-info-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.report-info-cell--full {
-  flex: 1 1 100%;
+.report-info-detail {
+  display: flex;
+  gap: 4px;
 }
 
 .report-info-label {
