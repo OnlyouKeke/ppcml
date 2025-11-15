@@ -333,7 +333,13 @@ class CTCAnalyzer:
                                     enhanced_red_with_boxes, bounding_rect, 'wbc')
 
         # 保存增强后的结果图像（带框选）
-        blue_save_path, green_save_path, red_save_path, mask_save_path = self._save_results(
+        (
+            blue_save_path,
+            green_save_path,
+            red_save_path,
+            overlay_save_path,
+            mask_save_path,
+        ) = self._save_results(
             enhanced_blue_with_boxes,
             enhanced_green_with_boxes,
             enhanced_red_with_boxes,
@@ -347,7 +353,12 @@ class CTCAnalyzer:
         self.results['mask_paths'].setdefault(sub_folder, []).append(mask_save_path)
 
         if found_ctc:
-            ctc_blue_path, ctc_green_path, ctc_red_path = self._save_ctc_highlights(
+            (
+                ctc_blue_path,
+                ctc_green_path,
+                ctc_red_path,
+                ctc_overlay_path,
+            ) = self._save_ctc_highlights(
                 ctc_only_blue,
                 ctc_only_green,
                 ctc_only_red,
@@ -361,9 +372,11 @@ class CTCAnalyzer:
                 'blue_path': ctc_blue_path,
                 'green_path': ctc_green_path,
                 'red_path': ctc_red_path,
+                'overlay_path': ctc_overlay_path,
                 'blue_original': blue_save_path,
                 'green_original': green_save_path,
                 'red_original': red_save_path,
+                'overlay_original': overlay_save_path,
                 'mask_path': mask_save_path
             })
 
@@ -417,10 +430,22 @@ class CTCAnalyzer:
         for img in [blue_img, green_img, red_img]:
             cv2.rectangle(img, (x, y), (x + w, y + h), color, 1)
 
+    def _compose_overlay_image(
+        self,
+        blue_img: np.ndarray,
+        green_img: np.ndarray,
+        red_img: np.ndarray,
+    ) -> np.ndarray:
+        """生成三个通道叠加后的合成图像"""
+
+        blue_green = cv2.addWeighted(blue_img, 1.0 / 3.0, green_img, 1.0 / 3.0, 0)
+        overlay = cv2.addWeighted(blue_green, 1.0, red_img, 1.0 / 3.0, 0)
+        return overlay
+
     def _save_results(self, blue_img: np.ndarray, green_img: np.ndarray,
                       red_img: np.ndarray, segmented_mask: np.ndarray,
                       sub_folder: str, blue_name: str, green_name: str,
-                      red_name: str) -> Tuple[str, str, str, str]:
+                      red_name: str) -> Tuple[str, str, str, str, str]:
         """
         保存结果图像（包含分割掩码）并返回保存路径
 
@@ -435,7 +460,7 @@ class CTCAnalyzer:
             red_name: 红色通道文件名
 
         Returns:
-            包含蓝色、绿色、红色通道图像及掩码的保存路径
+            包含蓝色、绿色、红色通道图像、叠加图像及掩码的保存路径
         """
         save_folder = Path(self.file_save_path) / sub_folder
         save_folder.mkdir(parents=True, exist_ok=True)
@@ -448,17 +473,28 @@ class CTCAnalyzer:
         mask_name = f"{blue_stem}_mask{blue_path.suffix}"
         mask_path = save_folder / mask_name
 
+        overlay_name = f"{blue_stem}_overlay{blue_path.suffix}"
+        overlay_path = save_folder / overlay_name
+        overlay_image = self._compose_overlay_image(blue_img, green_img, red_img)
+
         cv2.imwrite(str(blue_path), blue_img)
         cv2.imwrite(str(green_path), green_img)
         cv2.imwrite(str(red_path), red_img)
         cv2.imwrite(str(mask_path), segmented_mask)
+        cv2.imwrite(str(overlay_path), overlay_image)
 
-        return str(blue_path), str(green_path), str(red_path), str(mask_path)
+        return (
+            str(blue_path),
+            str(green_path),
+            str(red_path),
+            str(overlay_path),
+            str(mask_path),
+        )
 
     def _save_ctc_highlights(self, blue_img: np.ndarray, green_img: np.ndarray,
                              red_img: np.ndarray, sub_folder: str,
                              blue_name: str, green_name: str,
-                             red_name: str) -> Tuple[str, str, str]:
+                             red_name: str) -> Tuple[str, str, str, str]:
         """
         保存仅标注CTC的结果图像，并返回保存路径
 
@@ -472,7 +508,7 @@ class CTCAnalyzer:
             red_name: 红色通道原始文件名
 
         Returns:
-            蓝色、绿色、红色通道CTC高亮图像的保存路径
+            蓝色、绿色、红色通道及叠加后的CTC高亮图像的保存路径
         """
         highlight_folder = Path(self.file_save_path) / sub_folder / "ctc"
         highlight_folder.mkdir(parents=True, exist_ok=True)
@@ -480,12 +516,16 @@ class CTCAnalyzer:
         blue_path = highlight_folder / f"{Path(blue_name).stem}_ctc{Path(blue_name).suffix}"
         green_path = highlight_folder / f"{Path(green_name).stem}_ctc{Path(green_name).suffix}"
         red_path = highlight_folder / f"{Path(red_name).stem}_ctc{Path(red_name).suffix}"
+        overlay_path = highlight_folder / f"{Path(blue_name).stem}_ctc_overlay{Path(blue_name).suffix}"
+
+        overlay_image = self._compose_overlay_image(blue_img, green_img, red_img)
 
         cv2.imwrite(str(blue_path), blue_img)
         cv2.imwrite(str(green_path), green_img)
         cv2.imwrite(str(red_path), red_img)
+        cv2.imwrite(str(overlay_path), overlay_image)
 
-        return str(blue_path), str(green_path), str(red_path)
+        return str(blue_path), str(green_path), str(red_path), str(overlay_path)
 
     def process_all_images(self):
         """处理所有图像"""
