@@ -114,8 +114,9 @@ OTHER_ALIAS_KEYS = {alias.casefold() for alias in OTHER_ALIASES}
 DEFAULT_SAMPLE_NUMBER_PREFIX = "OTH"
 
 DISCLAIMER_LINES = [
-    "声明：本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。",
+    "本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。",
     "建议结合兽医临床表现、影像学及其他实验室检查综合判断。",
+    "检测人____________                审核人____________                签字/盖章____________",
 ]
 
 
@@ -994,11 +995,6 @@ def _build_report_document(
     _apply_run_style(separator_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-
-    footer = document.add_paragraph()
-    footer_run = footer.add_run("检测人：___________    审核人：___________    报告日期：___________")
-    _apply_run_style(footer_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
-    footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     for index, line in enumerate(DISCLAIMER_LINES):
         disclaimer_paragraph = document.add_paragraph()

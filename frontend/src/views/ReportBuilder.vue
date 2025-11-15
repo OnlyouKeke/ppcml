@@ -341,9 +341,6 @@
                     </div>
                   </div>
                 </section>
-                <footer class="preview-footer">
-                  检测人：______________&nbsp;&nbsp;&nbsp;&nbsp;审核人：______________&nbsp;&nbsp;&nbsp;&nbsp;报告日期：______________
-                </footer>
                 <div class="preview-disclaimer">
                   <p
                     v-for="(line, index) in disclaimerLines"
@@ -630,9 +627,9 @@ const reportNumberDisplay = computed(() => {
 })
 
 const disclaimerLines = [
-  '本报告仅供兽医专业判断与临床参考，不可直接作为最终诊断依据。',
-  '如对检测结果存在疑问，请联系检测机构进行复核。',
-  '报告中的影像及数据受采样与环境影响，请结合实际情况综合评估。'
+  '本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。',
+  '建议结合兽医临床表现、影像学及其他实验室检查综合判断。',
+  '检测人____________                审核人____________                签字/盖章____________'
 ]
 
 const formatGeneratedAt = (value: string) => {
@@ -1220,10 +1217,13 @@ defineExpose({
 .report-info-label,
 .report-info-value,
 .channel-preview-label,
-.preview-footer,
 .preview-disclaimer-line {
   font-size: 14.67px;
   font-weight: 400;
+}
+
+.preview-disclaimer-line {
+  white-space: pre-wrap;
 }
 
 .report-number {
@@ -1281,11 +1281,6 @@ defineExpose({
 }
 
 .channel-preview-label {
-  text-align: center;
-}
-
-.preview-footer {
-  margin-top: 16px;
   text-align: center;
 }
 
