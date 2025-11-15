@@ -94,8 +94,7 @@ SONGTI_FONT_NAME = "SimSun"
 TITLE_FONT_SIZE_PT = 18
 BODY_FONT_SIZE_PT = 11
 
-SAMPLE_NUMBER_PREFIX_MAP = {"猫": "CAT", "狗": "DOG"}
-DEFAULT_SAMPLE_NUMBER_PREFIX = "OTH"
+SAMPLE_NUMBER_PREFIX = "PE"
 SAMPLE_NUMBER_STORAGE_DIR = Path(__file__).resolve().parent.parent / "var"
 SAMPLE_NUMBER_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 SAMPLE_NUMBER_STORAGE_PATH = SAMPLE_NUMBER_STORAGE_DIR / "sample_number_sequence.json"
@@ -113,11 +112,8 @@ def _normalize_pet_type(value: str | None) -> str:
     return value.strip()
 
 
-def _resolve_sample_number_prefix(pet_type: str | None) -> str:
-    normalized = _normalize_pet_type(pet_type)
-    if not normalized:
-        return DEFAULT_SAMPLE_NUMBER_PREFIX
-    return SAMPLE_NUMBER_PREFIX_MAP.get(normalized, DEFAULT_SAMPLE_NUMBER_PREFIX)
+def _resolve_sample_number_prefix(_: str | None) -> str:
+    return SAMPLE_NUMBER_PREFIX
 
 
 def _load_sample_number_counters() -> dict[str, int]:
@@ -153,7 +149,7 @@ def _generate_next_sample_number(pet_type: str | None) -> str:
     prefix = _resolve_sample_number_prefix(pet_type)
     with SAMPLE_NUMBER_LOCK:
         counters = _load_sample_number_counters()
-        next_value = counters.get(prefix, 0) + 1
+        next_value = counters.get(prefix, -1) + 1
         counters[prefix] = next_value
         _save_sample_number_counters(counters)
 
@@ -471,15 +467,23 @@ def _generate_result_description(
     if sample_volume_ml is not None:
         ctc_cells_per_ml = _format_cells_per_ml(ctc_total, sample_volume_ml)
         wbc_cells_per_ml = _format_cells_per_ml(wbc_total, sample_volume_ml)
-        ratio_line = (
+        ratio_core = (
             f"检测CTC数量({ctc_cells_per_ml})cells/ml；"
             f"背景白细胞({wbc_cells_per_ml})cells/ml"
         )
     else:
         sample_volume_text = sample_volume_raw if sample_volume_raw else "未填写"
-        ratio_line = (
+        ratio_core = (
             f"检测CTC数量({ctc_total}/{sample_volume_text})cells/ml；"
             f"背景白细胞({wbc_total}/{sample_volume_text})cells/ml"
+        )
+
+    formatted_sample_volume = _format_sample_volume(sample_volume_raw)
+    if formatted_sample_volume == "未填写":
+        ratio_line = f"{ratio_core}（该输出受样品量输入影响）"
+    else:
+        ratio_line = (
+            f"{ratio_core}（该输出受样品量: {formatted_sample_volume} 输入影响）"
         )
 
     first_line = (
@@ -1223,10 +1227,10 @@ async def heartbeat() -> dict[str, float | str]:
 
 
 @app.get("/ctc/sample-number/next")
-async def fetch_next_sample_number(pet_type: str = Query(..., alias="petType")) -> dict[str, str]:
+async def fetch_next_sample_number(
+    pet_type: str | None = Query(None, alias="petType")
+) -> dict[str, str]:
     normalized_pet_type = _normalize_pet_type(pet_type)
-    if not normalized_pet_type:
-        raise HTTPException(status_code=400, detail="缺少宠物类型")
 
     sample_number_value = _generate_next_sample_number(normalized_pet_type)
     logger.info(
