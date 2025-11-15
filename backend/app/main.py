@@ -40,7 +40,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Iterable, List
+from typing import Iterable, List, Mapping
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -374,6 +374,40 @@ def _format_channel_summary_texts(analyzer: CTCAnalyzer) -> list[str]:
     return [f"{label} {values}" for label, values in channel_summary_pairs]
 
 
+def _generate_result_description(
+    metadata: Mapping[str, str] | None,
+    ctc_counts: Iterable[int] | None,
+    wbc_counts: Iterable[int] | None,
+) -> tuple[str, list[str]]:
+    ctc_list = list(ctc_counts or [])
+    wbc_list = list(wbc_counts or [])
+
+    if not ctc_list and not wbc_list:
+        return "结果说明：", ["未识别出有效的检测结果，请检查上传的影像资料。"]
+
+    normalized_metadata = metadata or {}
+    biomarker_value = (normalized_metadata.get("癌症标志物") or "").strip()
+    biomarker_label = biomarker_value if biomarker_value else "癌症标志物"
+
+    ctc_first_two = sum(ctc_list[:2])
+    wbc_first_two = sum(wbc_list[:2])
+
+    sample_volume_raw = (normalized_metadata.get("样品量（单位ml）") or "").strip()
+    if sample_volume_raw:
+        ratio_line = (
+            f"2. 检测CTC数量({sum(ctc_list)}/{sample_volume_raw})cells/ml；"
+            f"背景白细胞({sum(wbc_list)}/{sample_volume_raw})cells/ml"
+        )
+    else:
+        ratio_line = "2. 检测CTC数量与背景白细胞：缺少样品量信息，无法计算cells/ml。"
+
+    first_line = (
+        f"1. 在一二通道中找到{biomarker_label} {ctc_first_two}个，(CD45+) {wbc_first_two}个。"
+    )
+
+    return "结果说明：", [first_line, ratio_line]
+
+
 def _format_detection_result_rows(
     doc_names: Iterable[str],
     ctc_counts: Iterable[int],
@@ -470,6 +504,7 @@ def _build_report_document(
     *,
     mask_options: list[dict] | None = None,
     detection_result_rows: list[list[str]] | None = None,
+    result_description: tuple[str, list[str]] | None = None,
 ) -> None:
     document = Document()
 
@@ -620,10 +655,6 @@ def _build_report_document(
     if result_detail_paragraphs:
         result_detail_paragraphs[-1].paragraph_format.space_after = Pt(4)
 
-    selection_paragraph = document.add_paragraph()
-    selection_run = selection_paragraph.add_run("选三张不同荧光同一区域的照片，有方框标出是CTC。")
-    _apply_run_style(selection_run, BODY_FONT_SIZE_PT, color=RGBColor(55, 65, 81))
-
     ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
     if ctc_image_sets:
         image_set = ctc_image_sets[0]
@@ -667,8 +698,10 @@ def _build_report_document(
             else:
                 logger.warning("指定的掩码图像不存在或不可访问：%s", candidate_path)
 
+        overlay_preview = _resolve_preview_path("overlay_path", "overlay_original")
+
         if selected_labels_and_paths:
-            labels_and_paths = selected_labels_and_paths
+            labels_and_paths = list(selected_labels_and_paths)
         else:
             labels_and_paths = [
                 ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
@@ -682,41 +715,61 @@ def _build_report_document(
                     mask_override_path,
                 )
 
-        column_count = max(1, len(labels_and_paths))
-        image_table = document.add_table(rows=2, cols=column_count)
-        image_table.autofit = True
-        image_table.style = None
-        _set_table_transparent(image_table)
+        if overlay_preview:
+            labels_and_paths.append(("叠加通道", overlay_preview))
 
-        first_row = image_table.rows[0]
-        second_row = image_table.rows[1]
+        valid_items = [
+            (label, path)
+            for label, path in labels_and_paths
+            if path and os.path.exists(path)
+        ]
 
-        for idx, (label, path) in enumerate(labels_and_paths):
-            if not path or not os.path.exists(path):
-                continue
+        if valid_items:
+            column_count = len(valid_items)
+            image_table = document.add_table(rows=2, cols=column_count)
+            image_table.autofit = True
+            image_table.style = None
+            _set_table_transparent(image_table)
 
-            cell = first_row.cells[idx]
-            paragraph = cell.paragraphs[0]
-            run = paragraph.add_run()
-            run.add_picture(path, width=Inches(2.0))
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            first_row = image_table.rows[0]
+            second_row = image_table.rows[1]
 
-            label_cell = second_row.cells[idx]
-            _set_cell_text(label_cell, label, bold=True, color=RGBColor(31, 41, 55))
-            label_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for idx, (label, path) in enumerate(valid_items):
+                cell = first_row.cells[idx]
+                paragraph = cell.paragraphs[0]
+                run = paragraph.add_run()
+                run.add_picture(path, width=Inches(2.0))
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                label_cell = second_row.cells[idx]
+                _set_cell_text(label_cell, label, bold=True, color=RGBColor(31, 41, 55))
+                label_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        else:
+            no_image_paragraph = document.add_paragraph()
+            no_image_run = no_image_paragraph.add_run("当前未检测到可用于展示的CTC图像。")
+            _apply_run_style(no_image_run, BODY_FONT_SIZE_PT, color=RGBColor(107, 114, 128))
     else:
         no_image_paragraph = document.add_paragraph()
         no_image_run = no_image_paragraph.add_run("当前未检测到可用于展示的CTC图像。")
         _apply_run_style(no_image_run, BODY_FONT_SIZE_PT, color=RGBColor(107, 114, 128))
 
-    result_text = (
-        f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
-        if doc_names
-        else "结果说明：未能识别出有效的检测结果，请检查上传的影像资料。"
+    description_heading, description_lines = (
+        result_description
+        if result_description is not None
+        else _generate_result_description(metadata, ctc_counts, wbc_counts)
     )
+    result_color = RGBColor(0, 0, 0) if doc_names else RGBColor(107, 114, 128)
+
     result_paragraph = document.add_paragraph()
-    result_run = result_paragraph.add_run(result_text)
-    _apply_run_style(result_run, BODY_FONT_SIZE_PT, color=RGBColor(0, 0, 0) if doc_names else RGBColor(107, 114, 128))  # 改为黑色
+    result_paragraph.paragraph_format.space_after = Pt(0 if description_lines else 4)
+    result_run = result_paragraph.add_run(description_heading)
+    _apply_run_style(result_run, BODY_FONT_SIZE_PT, color=result_color)
+
+    for idx, line in enumerate(description_lines):
+        line_paragraph = document.add_paragraph()
+        line_run = line_paragraph.add_run(line)
+        _apply_run_style(line_run, BODY_FONT_SIZE_PT, color=result_color)
+        line_paragraph.paragraph_format.space_after = Pt(4 if idx == len(description_lines) - 1 else 0)
 
     biomarker_value = (metadata.get("癌症标志物") or "").strip()
     biomarker_text = biomarker_value if biomarker_value else "______________"
@@ -1172,7 +1225,8 @@ async def generate_ctc_report(
         total_ctc = sum(ctc_counts)
         total_wbc = sum(wbc_counts)
 
-        selection_text = "选三张不同荧光同一区域的照片，有方框标出是CTC。"
+        result_description = _generate_result_description(metadata, ctc_counts, wbc_counts)
+        selection_text = ""
 
         mask_options_payload: list[dict] = []
         mask_paths_map = analyzer.results.get("mask_paths", {}) or {}
@@ -1292,6 +1346,7 @@ async def generate_ctc_report(
                 ("蓝色通道", ("blue_path", "blue_original")),
                 ("绿色通道", ("green_path", "green_original")),
                 ("红色通道", ("red_path", "red_original")),
+                ("叠加通道", ("overlay_path", "overlay_original")),
             ):
                 image_path = _resolve_image(*keys)
                 if not image_path:
@@ -1311,11 +1366,9 @@ async def generate_ctc_report(
             if images_payload:
                 image_set_payload = {"items": images_payload}
 
-        result_text = (
-            f"结果说明：经实验结果判定，在一二通道中找到CD45 {total_wbc}个，CK {total_ctc}个。"
-            if doc_names
-            else "结果说明：未识别出有效的检测结果，请检查上传的影像资料。"
-        )
+        heading_text, description_lines = result_description
+        result_text_parts = [heading_text, *(description_lines or [])]
+        result_text = "\n".join(part for part in result_text_parts if part)
 
         biomarker_value = (metadata.get("癌症标志物") or "").strip()
         biomarker_text = biomarker_value if biomarker_value else "______________"
@@ -1389,6 +1442,7 @@ async def generate_ctc_report(
                 report_path,
                 channel_summary_texts=channel_summary_texts,
                 detection_result_rows=detection_result_rows,
+                result_description=result_description,
             )
             logger.info("报告已生成：%s", report_path)
             _sync_output_to_user_directory(output_dir, user_output_dir, copy_b=False)
@@ -1464,6 +1518,9 @@ async def export_ctc_report(
     metadata_dict = state_data.get("metadata") or {}
     metadata = OrderedDict((key, metadata_dict[key]) for key in metadata_dict)
     results = state_data.get("results") or {}
+    doc_names_state = results.get("doc_names") or []
+    ctc_counts_state = results.get("green_single_channel") or []
+    wbc_counts_state = results.get("white_single_channel") or []
     channel_summary_texts = state_data.get("channelSummaryTexts") or []
     mask_options_state = state_data.get("maskOptions") or []
     user_output_dir_str = state_data.get("userOutputDirectory") or ""
@@ -1491,9 +1548,6 @@ async def export_ctc_report(
             detection_result_rows = parsed_rows
 
     if detection_result_rows is None:
-        doc_names_state = results.get("doc_names") or []
-        ctc_counts_state = results.get("green_single_channel") or []
-        wbc_counts_state = results.get("white_single_channel") or []
         detection_result_rows = _format_detection_result_rows(
             doc_names_state,
             ctc_counts_state,
@@ -1557,6 +1611,12 @@ async def export_ctc_report(
                 }
             )
 
+    result_description = _generate_result_description(
+        metadata,
+        ctc_counts_state,
+        wbc_counts_state,
+    )
+
     analyzer_stub = SimpleNamespace(results=results)
     report_path = output_dir / "ctc_report.docx"
 
@@ -1567,6 +1627,7 @@ async def export_ctc_report(
         channel_summary_texts=channel_summary_texts,
         mask_options=mask_option_payloads or None,
         detection_result_rows=detection_result_rows,
+        result_description=result_description,
     )
     logger.info("报告文档已生成：%s", report_path)
 
