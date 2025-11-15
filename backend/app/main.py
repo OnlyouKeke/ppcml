@@ -563,7 +563,7 @@ def _build_report_document(
             ]
         )
 
-        divider_text = "──────────────────────────────────────────────────"
+        divider_text = "─────────────────────────────────────────────────"
         info_lines = [first_line, second_line, third_line, fourth_line]
 
         info_paragraphs = []
