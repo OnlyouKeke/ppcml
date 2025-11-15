@@ -499,15 +499,16 @@ def _build_report_document(
                 f"宠物姓名: {_wrap_ascii_parentheses(metadata.get('宠物姓名'))}",
                 f"性别: {_wrap_ascii_parentheses(metadata.get('性别'))}",
                 f"宠物类型: {_wrap_ascii_parentheses(metadata.get('宠物类型'))}",
+                f"年龄: {_wrap_ascii_parentheses(metadata.get('年龄'))}",
+                f"送检单位: {_wrap_ascii_parentheses(metadata.get('机构名称'))}",
             ]
         )
 
         second_line = "   ".join(
             [
-                f"年龄: {_wrap_ascii_parentheses(metadata.get('年龄'))}",
-                f"送检单位: {_wrap_ascii_parentheses(metadata.get('机构名称'))}",
                 f"送检时间: {_wrap_ascii_parentheses(detection_date or None)}",
                 f"科别: {_wrap_ascii_parentheses(metadata.get('科别'))}",
+                f"癌症标志物: {_wrap_ascii_parentheses(metadata.get('癌症标志物'))}",
             ]
         )
 
@@ -517,26 +518,32 @@ def _build_report_document(
 
         third_line = "   ".join(
             [
-                f"癌症标志物: {_wrap_ascii_parentheses(metadata.get('癌症标志物'))}",
                 f"样本类型: {_wrap_ascii_parentheses(metadata.get('标本类型'))}",
                 f"样品量: {_wrap_ascii_parentheses(formatted_sample_volume)}",
                 f"样本编号: {_wrap_ascii_parentheses(metadata.get('样本编号'))}",
+                f"样本状态: {_wrap_ascii_parentheses(metadata.get('样本状态'))}",
             ]
         )
 
-        status_line = _format_checkbox_line("样本状态", metadata.get("样本状态"), ["合格", "不合格"])
-        medication_line = _format_checkbox_line(
-            "一周内是否有药物摄入",
-            metadata.get("一周内是否有药物摄入"),
-            ["有", "无"],
+        medication_value = _wrap_ascii_parentheses(
+            metadata.get("一周内是否有药物摄入")
         )
-        fourth_line = f"{status_line}   {medication_line}".rstrip()
+        notes_value = _wrap_ascii_parentheses(metadata.get("备注"), fallback="无")
+        fourth_line = "   ".join(
+            [
+                f"一周内是否有药物摄入: {medication_value}",
+                f"如有，请说明: {notes_value}",
+            ]
+        )
 
-        fifth_line = f"如有，请说明: {_wrap_ascii_parentheses(metadata.get('备注'), fallback='无')}"
-
-        info_lines = [first_line, second_line, third_line, fourth_line, fifth_line]
+        divider_text = "────────────────────────────────────────────────────────"
+        info_lines = [first_line, second_line, third_line, fourth_line]
 
         info_paragraphs = []
+        divider_paragraph = document.add_paragraph()
+        divider_run = divider_paragraph.add_run(divider_text)
+        _apply_run_style(divider_run, BODY_FONT_SIZE_PT, color=RGBColor(0, 0, 0))
+        divider_paragraph.paragraph_format.space_after = Pt(0)
         for line in info_lines:
             paragraph = document.add_paragraph()
             run = paragraph.add_run(line)
@@ -545,7 +552,12 @@ def _build_report_document(
             info_paragraphs.append(paragraph)
 
         if info_paragraphs:
-            info_paragraphs[-1].paragraph_format.space_after = Pt(6)
+            info_paragraphs[-1].paragraph_format.space_after = Pt(0)
+
+        bottom_divider = document.add_paragraph()
+        bottom_run = bottom_divider.add_run(divider_text)
+        _apply_run_style(bottom_run, BODY_FONT_SIZE_PT, color=RGBColor(0, 0, 0))
+        bottom_divider.paragraph_format.space_after = Pt(6)
 
 
     result_heading = document.add_paragraph()
