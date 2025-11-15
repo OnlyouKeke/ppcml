@@ -1,5 +1,10 @@
 import axios, { isAxiosError } from 'axios'
-import type { CtcReportDocxResponse, CtcReportResponse, HeartbeatResponse } from '../types/api'
+import type {
+  CtcReportDocxResponse,
+  CtcReportResponse,
+  HeartbeatResponse,
+  SampleNumberResponse
+} from '../types/api'
 
 type FileWithRelativePath = File & { webkitRelativePath?: string }
 
@@ -93,6 +98,19 @@ api.interceptors.response.use(
 
 export const getHeartbeat = async (): Promise<HeartbeatResponse> => {
   return await api.get('/healthz', { timeout: 50000 })
+}
+
+export const getNextSampleNumber = async (
+  petType: string
+): Promise<SampleNumberResponse> => {
+  const data = await api.get('/ctc/sample-number/next', {
+    params: { petType }
+  })
+  const sampleNumber = (data as any)?.sampleNumber
+  if (typeof sampleNumber !== 'string') {
+    throw new Error('无效的样本编号响应')
+  }
+  return { sampleNumber }
 }
 
 interface CtcReportPayload {

@@ -105,8 +105,8 @@
                     v-model="form.sampleNumber"
                     :maxlength="sampleNumberMaxLength"
                     :disabled="!form.petType"
+                    readonly
                     placeholder="请选择宠物类型后填写"
-                    @input="handleSampleNumberInput"
                   />
                 </el-form-item>
               </el-col>
@@ -400,9 +400,9 @@
   </template>
 
 <script lang="ts" setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { postExportCtcReport, postGenerateCtcReport } from '../api/api'
+import { getNextSampleNumber, postExportCtcReport, postGenerateCtcReport } from '../api/api'
 import type {
   CtcReportResponse,
   ReportMaskOption,
@@ -464,6 +464,8 @@ const form = reactive({
   outputDirPath: '',
   reportNumber: ''
 })
+
+const latestSampleNumberRequest = ref<symbol | null>(null)
 
 const folderFileCount = computed(() => selectedFiles.value.length)
 
@@ -648,12 +650,21 @@ const resetMaskSelection = () => {
   maskSelectionOrderMap.value = new Map<string, number>()
 }
 
-const handleSampleNumberInput = (value: string | number) => {
-  const raw = typeof value === 'string' ? value : String(value ?? '')
-  const sanitized = raw.replace(/[^a-zA-Z0-9-_]/g, '').toUpperCase()
-  form.sampleNumber = sanitized.slice(0, sampleNumberMaxLength)
-  if (!form.reportNumber) {
-    form.reportNumber = form.sampleNumber
+const assignSampleNumber = (value: string) => {
+  const previousSampleNumber = form.sampleNumber
+  const normalized = (value ?? '').toString().trim().toUpperCase()
+  const truncated = normalized.slice(0, sampleNumberMaxLength)
+  form.sampleNumber = truncated
+  if (!form.reportNumber || form.reportNumber === previousSampleNumber) {
+    form.reportNumber = truncated
+  }
+}
+
+const clearSampleNumber = () => {
+  const previousSampleNumber = form.sampleNumber
+  form.sampleNumber = ''
+  if (!form.reportNumber || form.reportNumber === previousSampleNumber) {
+    form.reportNumber = ''
   }
 }
 
@@ -715,6 +726,47 @@ const extractErrorMessage = (error: unknown) => {
   return '操作失败，请稍后重试'
 }
 
+watch(
+  () => form.petType,
+  async (newPetType, oldPetType) => {
+    const normalizedNew = (newPetType || '').trim()
+    const normalizedOld = (oldPetType || '').trim()
+
+    if (!normalizedNew) {
+      latestSampleNumberRequest.value = null
+      clearSampleNumber()
+      return
+    }
+
+    if (normalizedNew === normalizedOld && form.sampleNumber) {
+      return
+    }
+
+    const requestToken = Symbol('sample-number-request')
+    latestSampleNumberRequest.value = requestToken
+    const previousSampleNumber = form.sampleNumber
+
+    try {
+      const response = await getNextSampleNumber(normalizedNew)
+      if (latestSampleNumberRequest.value !== requestToken) {
+        return
+      }
+      assignSampleNumber(response.sampleNumber)
+    } catch (error) {
+      if (latestSampleNumberRequest.value !== requestToken) {
+        return
+      }
+      assignSampleNumber(previousSampleNumber)
+      const message = extractErrorMessage(error)
+      ElMessage.error(message || '无法生成样本编号')
+    } finally {
+      if (latestSampleNumberRequest.value === requestToken) {
+        latestSampleNumberRequest.value = null
+      }
+    }
+  }
+)
+
 const toggleMaskSelection = (id: string) => {
   const current = new Map(maskSelectionOrderMap.value)
   if (current.has(id)) {
@@ -775,6 +827,9 @@ const runDetection = async () => {
     })
 
     reportData.value = response
+    if (response.generatedSampleNumber) {
+      assignSampleNumber(response.generatedSampleNumber)
+    }
     reportToken.value = response.reportToken ?? ''
     previewWarnings.value = response.warnings ?? []
     maskOptions.value = response.maskOptions ?? []
@@ -857,7 +912,7 @@ const resetAll = () => {
   form.cancerBiomarker = ''
   form.sampleType = ''
   form.sampleVolume = ''
-  form.sampleNumber = ''
+  clearSampleNumber()
   form.sampleStatus = ''
   form.medicationIntake = ''
   form.notes = ''
@@ -873,6 +928,7 @@ const resetAll = () => {
   maskOptions.value = []
   maskDirectoryPath.value = ''
   resetMaskSelection()
+  latestSampleNumberRequest.value = null
 
   if (fileInputRef.value) {
     fileInputRef.value.value = ''

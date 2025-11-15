@@ -34,6 +34,7 @@ import shutil
 import io
 import mimetypes
 import tempfile
+import threading
 import time
 import zipfile
 from collections import OrderedDict
@@ -48,7 +49,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches, Cm
 import cv2
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -93,10 +94,81 @@ SONGTI_FONT_NAME = "SimSun"
 TITLE_FONT_SIZE_PT = 18
 BODY_FONT_SIZE_PT = 11
 
+SAMPLE_NUMBER_PREFIX_MAP = {"猫": "CAT", "狗": "DOG"}
+DEFAULT_SAMPLE_NUMBER_PREFIX = "OTH"
+SAMPLE_NUMBER_STORAGE_DIR = Path(__file__).resolve().parent.parent / "var"
+SAMPLE_NUMBER_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+SAMPLE_NUMBER_STORAGE_PATH = SAMPLE_NUMBER_STORAGE_DIR / "sample_number_sequence.json"
+SAMPLE_NUMBER_LOCK = threading.Lock()
+
 DISCLAIMER_LINES = [
     "声明：本检测结果仅供科研及临床辅助参考，不能作为唯一诊断依据。",
     "建议结合兽医临床表现、影像学及其他实验室检查综合判断。",
 ]
+
+
+def _normalize_pet_type(value: str | None) -> str:
+    if not value:
+        return ""
+    return value.strip()
+
+
+def _resolve_sample_number_prefix(pet_type: str | None) -> str:
+    normalized = _normalize_pet_type(pet_type)
+    if not normalized:
+        return DEFAULT_SAMPLE_NUMBER_PREFIX
+    return SAMPLE_NUMBER_PREFIX_MAP.get(normalized, DEFAULT_SAMPLE_NUMBER_PREFIX)
+
+
+def _load_sample_number_counters() -> dict[str, int]:
+    if not SAMPLE_NUMBER_STORAGE_PATH.exists():
+        return {}
+    try:
+        with SAMPLE_NUMBER_STORAGE_PATH.open("r", encoding="utf-8") as file_obj:
+            data = json.load(file_obj)
+    except (OSError, json.JSONDecodeError):
+        logger.warning("无法读取样本编号序列文件，将重新初始化。")
+        return {}
+
+    counters: dict[str, int] = {}
+    if isinstance(data, dict):
+        for prefix, value in data.items():
+            try:
+                counters[str(prefix)] = int(value)
+            except (TypeError, ValueError):
+                logger.debug("忽略无效的样本编号序列值：prefix=%s value=%s", prefix, value)
+                continue
+    return counters
+
+
+def _save_sample_number_counters(counters: Mapping[str, int]) -> None:
+    try:
+        with SAMPLE_NUMBER_STORAGE_PATH.open("w", encoding="utf-8") as file_obj:
+            json.dump(counters, file_obj, ensure_ascii=False, indent=2)
+    except OSError:
+        logger.exception("保存样本编号序列文件失败：%s", SAMPLE_NUMBER_STORAGE_PATH)
+
+
+def _generate_next_sample_number(pet_type: str | None) -> str:
+    prefix = _resolve_sample_number_prefix(pet_type)
+    with SAMPLE_NUMBER_LOCK:
+        counters = _load_sample_number_counters()
+        next_value = counters.get(prefix, 0) + 1
+        counters[prefix] = next_value
+        _save_sample_number_counters(counters)
+
+    sample_number = f"{prefix}{next_value:07d}"
+    logger.info("生成样本编号：%s（宠物类型=%s）", sample_number, pet_type or "未填写")
+    return sample_number
+
+
+def _sync_sample_number_counter(prefix: str, numeric_value: int) -> None:
+    with SAMPLE_NUMBER_LOCK:
+        counters = _load_sample_number_counters()
+        current_max = counters.get(prefix, 0)
+        if numeric_value > current_max:
+            counters[prefix] = numeric_value
+            _save_sample_number_counters(counters)
 
 
 def verify_startup_token() -> None:
@@ -393,13 +465,23 @@ def _generate_result_description(
     wbc_first_two = sum(wbc_list[:2])
 
     sample_volume_raw = (normalized_metadata.get("样品量（单位ml）") or "").strip()
-    if sample_volume_raw:
+    sample_volume_ml = _parse_sample_volume_to_ml(sample_volume_raw)
+    ctc_total = sum(ctc_list)
+    wbc_total = sum(wbc_list)
+
+    if sample_volume_ml is not None:
+        ctc_cells_per_ml = _format_cells_per_ml(ctc_total, sample_volume_ml)
+        wbc_cells_per_ml = _format_cells_per_ml(wbc_total, sample_volume_ml)
         ratio_line = (
-            f"2. 检测CTC数量({sum(ctc_list)}/{sample_volume_raw})cells/ml；"
-            f"背景白细胞({sum(wbc_list)}/{sample_volume_raw})cells/ml"
+            f"2. 检测CTC数量({ctc_cells_per_ml})cells/ml；"
+            f"背景白细胞({wbc_cells_per_ml})cells/ml"
         )
     else:
-        ratio_line = "2. 检测CTC数量与背景白细胞：缺少样品量信息，无法计算cells/ml。"
+        sample_volume_text = sample_volume_raw if sample_volume_raw else "未填写"
+        ratio_line = (
+            f"2. 检测CTC数量({ctc_total}/{sample_volume_text})cells/ml；"
+            f"背景白细胞({wbc_total}/{sample_volume_text})cells/ml"
+        )
 
     first_line = (
         f"1. 在一二通道中找到{biomarker_label} {ctc_first_two}个，(CD45+) {wbc_first_two}个。"
@@ -470,6 +552,35 @@ def _ensure_value(value: str | None, fallback: str = "未填写") -> str:
         return fallback
     normalized = value.strip()
     return normalized if normalized else fallback
+
+
+def _parse_sample_volume_to_ml(value: str | None) -> float | None:
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    compact = normalized.replace("毫升", "").replace("ml", "").replace(" ", "")
+    compact = compact.replace(",", "")
+    if not compact:
+        return None
+    try:
+        volume = float(compact)
+    except ValueError:
+        logger.debug("无法解析样品量为浮点数：%s", value)
+        return None
+    if volume <= 0:
+        logger.debug("样品量非正数，忽略：%s", value)
+        return None
+    return volume
+
+
+def _format_cells_per_ml(total_cells: int, sample_volume_ml: float | None) -> str:
+    if sample_volume_ml:
+        value = total_cells / sample_volume_ml
+        formatted = f"{value:.2f}".rstrip("0").rstrip(".")
+        return formatted
+    return str(total_cells)
 
 
 def _format_sample_volume(value: str | None) -> str:
@@ -1103,6 +1214,21 @@ async def heartbeat() -> dict[str, float | str]:
     }
 
 
+@app.get("/ctc/sample-number/next")
+async def fetch_next_sample_number(pet_type: str = Query(..., alias="petType")) -> dict[str, str]:
+    normalized_pet_type = _normalize_pet_type(pet_type)
+    if not normalized_pet_type:
+        raise HTTPException(status_code=400, detail="缺少宠物类型")
+
+    sample_number_value = _generate_next_sample_number(normalized_pet_type)
+    logger.info(
+        "通过接口生成样本编号：%s（宠物类型=%s）",
+        sample_number_value,
+        normalized_pet_type,
+    )
+    return {"sampleNumber": sample_number_value}
+
+
 @app.post("/ctc/report")
 async def generate_ctc_report(
     file: UploadFile | None = File(None),
@@ -1182,14 +1308,37 @@ async def generate_ctc_report(
         analyzer.process_all_images()
         logger.info("图像处理完成，生成统计结果：%s", analyzer.results.get("doc_names", []))
 
+        normalized_pet_type_value = _normalize_pet_type(pet_type)
+        sanitized_sample_number = (sample_number or "").strip().upper()
+        expected_prefix = _resolve_sample_number_prefix(normalized_pet_type_value)
+        generated_sample_number = ""
+        if sanitized_sample_number:
+            if sanitized_sample_number.startswith(expected_prefix):
+                numeric_part = sanitized_sample_number[len(expected_prefix):]
+                if numeric_part.isdigit() and len(numeric_part) == 7:
+                    _sync_sample_number_counter(expected_prefix, int(numeric_part))
+                else:
+                    sanitized_sample_number = _generate_next_sample_number(normalized_pet_type_value)
+                    generated_sample_number = sanitized_sample_number
+            else:
+                sanitized_sample_number = _generate_next_sample_number(normalized_pet_type_value)
+                generated_sample_number = sanitized_sample_number
+        else:
+            sanitized_sample_number = _generate_next_sample_number(normalized_pet_type_value)
+            generated_sample_number = sanitized_sample_number
+
+        normalized_report_number = (report_number or "").strip()
+        if not normalized_report_number:
+            normalized_report_number = sanitized_sample_number
+
         metadata = _create_metadata_entries(
             institution_name,
-            report_number,
+            normalized_report_number,
             detection_date,
-            sample_number,
+            sanitized_sample_number,
             sample_volume,
             sample_status,
-            pet_type,
+            normalized_pet_type_value or pet_type,
             cancer_biomarker,
             department,
             pet_name,
@@ -1204,6 +1353,7 @@ async def generate_ctc_report(
             "报告元数据：%s",
             {key: metadata[key] for key in metadata},
         )
+        auto_generated_sample_number = bool(generated_sample_number)
 
         report_path = output_dir / "ctc_report.docx"
         channel_summary_texts = _format_channel_summary_texts(analyzer)
@@ -1406,6 +1556,8 @@ async def generate_ctc_report(
             "createdAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
             "maskInputDirectory": str(mask_input_dir) if mask_input_dir else "",
+            "generatedSampleNumber": sanitized_sample_number,
+            "autoGeneratedSampleNumber": auto_generated_sample_number,
         }
         (output_dir / "report_state.json").write_text(
             json.dumps(state_payload, ensure_ascii=False, indent=2),
@@ -1433,6 +1585,8 @@ async def generate_ctc_report(
             "userOutputDirectory": str(user_output_dir) if user_output_dir else "",
             "maskInputDirectory": str(mask_input_dir) if mask_input_dir else "",
             "warnings": warnings,
+            "generatedSampleNumber": sanitized_sample_number,
+            "autoGeneratedSampleNumber": auto_generated_sample_number,
         }
 
         if not preview_only_flag:
