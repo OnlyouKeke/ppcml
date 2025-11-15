@@ -991,7 +991,7 @@ def _build_report_document(
         _apply_run_style(notes_run, BODY_FONT_SIZE_PT, color=RGBColor(30, 64, 45))
 
     separator = document.add_paragraph()
-    separator_run = separator.add_run("--------------------------------------------------------------------")
+    separator_run = separator.add_run("─────────────────────────────────────────────────")
     _apply_run_style(separator_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -1000,7 +1000,7 @@ def _build_report_document(
         disclaimer_paragraph = document.add_paragraph()
         disclaimer_paragraph.paragraph_format.space_before = Pt(4 if index == 0 else 2)
         disclaimer_paragraph.paragraph_format.space_after = Pt(0)
-        disclaimer_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        disclaimer_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         disclaimer_run = disclaimer_paragraph.add_run(line)
         _apply_run_style(disclaimer_run, BODY_FONT_SIZE_PT, color=RGBColor(107, 114, 128))
 
