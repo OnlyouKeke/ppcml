@@ -45,6 +45,7 @@ export interface CtcReportResponse {
     totalWbc: number
   }
   resultText: string
+  detectionResultRows?: string[][]
   remarkText: string
   selectionText: string
   hasCtcImages: boolean

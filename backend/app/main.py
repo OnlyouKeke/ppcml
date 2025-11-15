@@ -374,6 +374,38 @@ def _format_channel_summary_texts(analyzer: CTCAnalyzer) -> list[str]:
     return [f"{label} {values}" for label, values in channel_summary_pairs]
 
 
+def _format_detection_result_rows(
+    doc_names: Iterable[str],
+    ctc_counts: Iterable[int],
+    wbc_counts: Iterable[int],
+) -> list[list[str]]:
+    triplets = list(zip(doc_names, ctc_counts, wbc_counts))[:3]
+    if not triplets:
+        return []
+
+    entries: list[str] = []
+    for index, (name, ctc, wbc) in enumerate(triplets):
+        normalized_name = (name or "").strip()
+        label = normalized_name if normalized_name else f"检测结果{index + 1}"
+        entries.append(f"{label}: CD45 {wbc}个，CK {ctc}个")
+
+    combined_wbc = sum(wbc for _, _, wbc in triplets)
+    combined_ctc = sum(ctc for _, ctc, _ in triplets)
+    combined_entry = f"合计: CD45 {combined_wbc}个，CK {combined_ctc}个"
+
+    rows: list[list[str]] = []
+    first_row_items = entries[:2]
+    if first_row_items:
+        rows.append(first_row_items)
+
+    remaining_items = entries[2:]
+    second_row_items = remaining_items + [combined_entry]
+    if second_row_items:
+        rows.append(second_row_items)
+
+    return rows
+
+
 def _wrap_parentheses(value: str | None) -> str:
     if not value:
         return "（未填写）"
@@ -437,6 +469,7 @@ def _build_report_document(
     mask_option: dict | None = None,
     *,
     mask_options: list[dict] | None = None,
+    detection_result_rows: list[list[str]] | None = None,
 ) -> None:
     document = Document()
 
@@ -489,24 +522,22 @@ def _build_report_document(
 
     if metadata:
         detection_date = _format_report_date(metadata.get("检测日期"))
-        first_line = "   ".join(
-            [
-                f"宠主姓名: {_wrap_ascii_parentheses(metadata.get('宠主姓名'))}",
-                f"宠物姓名: {_wrap_ascii_parentheses(metadata.get('宠物姓名'))}",
-                f"性别: {_wrap_ascii_parentheses(metadata.get('性别'))}",
-                f"宠物类型: {_wrap_ascii_parentheses(metadata.get('宠物类型'))}",
-                f"年龄: {_wrap_ascii_parentheses(metadata.get('年龄'))}",
-                f"送检单位: {_wrap_ascii_parentheses(metadata.get('机构名称'))}",
-            ]
-        )
+        first_line_parts = [
+            f"宠主姓名: {_wrap_ascii_parentheses(metadata.get('宠主姓名'))}",
+            f"宠物姓名: {_wrap_ascii_parentheses(metadata.get('宠物姓名'))}",
+            f"性别: {_wrap_ascii_parentheses(metadata.get('性别'))}",
+            f"宠物类型: {_wrap_ascii_parentheses(metadata.get('宠物类型'))}",
+            f"年龄: {_wrap_ascii_parentheses(metadata.get('年龄'))}",
+        ]
+        first_line = "   ".join(first_line_parts)
 
-        second_line = "   ".join(
-            [
-                f"送检时间: {_wrap_ascii_parentheses(detection_date or None)}",
-                f"科别: {_wrap_ascii_parentheses(metadata.get('科别'))}",
-                f"癌症标志物: {_wrap_ascii_parentheses(metadata.get('癌症标志物'))}",
-            ]
-        )
+        second_line_parts = [
+            f"送检单位: {_wrap_ascii_parentheses(metadata.get('机构名称'))}",
+            f"送检时间: {_wrap_ascii_parentheses(detection_date or None)}",
+            f"科别: {_wrap_ascii_parentheses(metadata.get('科别'))}",
+            f"癌症标志物: {_wrap_ascii_parentheses(metadata.get('癌症标志物'))}",
+        ]
+        second_line = "   ".join(second_line_parts)
 
         formatted_sample_volume = _format_sample_volume(metadata.get("样品量（单位ml）"))
         if formatted_sample_volume != "未填写":
@@ -568,6 +599,26 @@ def _build_report_document(
 
     total_ctc = sum(ctc_counts)
     total_wbc = sum(wbc_counts)
+
+    if detection_result_rows is None:
+        detection_result_rows = _format_detection_result_rows(
+            doc_names,
+            ctc_counts,
+            wbc_counts,
+        )
+
+    result_detail_paragraphs: list = []
+    for row_entries in detection_result_rows:
+        if not row_entries:
+            continue
+        detail_paragraph = document.add_paragraph()
+        detail_run = detail_paragraph.add_run("   ".join(row_entries))
+        _apply_run_style(detail_run, BODY_FONT_SIZE_PT, color=RGBColor(55, 65, 81))
+        detail_paragraph.paragraph_format.space_after = Pt(0)
+        result_detail_paragraphs.append(detail_paragraph)
+
+    if result_detail_paragraphs:
+        result_detail_paragraphs[-1].paragraph_format.space_after = Pt(4)
 
     selection_paragraph = document.add_paragraph()
     selection_run = selection_paragraph.add_run("选三张不同荧光同一区域的照片，有方框标出是CTC。")
@@ -1112,6 +1163,12 @@ async def generate_ctc_report(
             for name, ctc, wbc in zip(doc_names, ctc_counts, wbc_counts)
         ]
 
+        detection_result_rows = _format_detection_result_rows(
+            doc_names,
+            ctc_counts,
+            wbc_counts,
+        )
+
         total_ctc = sum(ctc_counts)
         total_wbc = sum(wbc_counts)
 
@@ -1282,6 +1339,7 @@ async def generate_ctc_report(
             "channelSummaryTexts": channel_summary_texts,
             "selectionText": selection_text,
             "resultText": result_text,
+            "detectionResultRows": detection_result_rows,
             "remarkText": remark_text,
             "maskOptions": [
                 {
@@ -1311,6 +1369,7 @@ async def generate_ctc_report(
                 "totalWbc": total_wbc,
             },
             "resultText": result_text,
+            "detectionResultRows": detection_result_rows,
             "remarkText": remark_text,
             "selectionText": selection_text,
             "hasCtcImages": bool(image_set_payload),
@@ -1329,6 +1388,7 @@ async def generate_ctc_report(
                 metadata,
                 report_path,
                 channel_summary_texts=channel_summary_texts,
+                detection_result_rows=detection_result_rows,
             )
             logger.info("报告已生成：%s", report_path)
             _sync_output_to_user_directory(output_dir, user_output_dir, copy_b=False)
@@ -1413,6 +1473,33 @@ async def export_ctc_report(
         else None
     )
 
+    detection_result_rows_state = state_data.get("detectionResultRows")
+    detection_result_rows: list[list[str]] | None = None
+    if isinstance(detection_result_rows_state, list):
+        parsed_rows: list[list[str]] = []
+        for row in detection_result_rows_state:
+            if not isinstance(row, list):
+                parsed_rows = []
+                break
+            parsed_row: list[str] = []
+            for item in row:
+                if isinstance(item, str):
+                    parsed_row.append(item)
+            if parsed_row:
+                parsed_rows.append(parsed_row)
+        if parsed_rows:
+            detection_result_rows = parsed_rows
+
+    if detection_result_rows is None:
+        doc_names_state = results.get("doc_names") or []
+        ctc_counts_state = results.get("green_single_channel") or []
+        wbc_counts_state = results.get("white_single_channel") or []
+        detection_result_rows = _format_detection_result_rows(
+            doc_names_state,
+            ctc_counts_state,
+            wbc_counts_state,
+        )
+
     selected_mask_option_ids: list[str] = []
     if mask_option_ids:
         try:
@@ -1479,6 +1566,7 @@ async def export_ctc_report(
         report_path,
         channel_summary_texts=channel_summary_texts,
         mask_options=mask_option_payloads or None,
+        detection_result_rows=detection_result_rows,
     )
     logger.info("报告文档已生成：%s", report_path)
 
