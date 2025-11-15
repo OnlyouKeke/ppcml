@@ -555,10 +555,10 @@ const previewInfoLines = computed<PreviewLineField[][]>(() => {
       { label: '宠物姓名', value: ensureValue('宠物姓名') },
       { label: '性别', value: ensureValue('性别') },
       { label: '宠物类型', value: ensureValue('宠物类型') },
-      { label: '年龄', value: ensureValue('年龄') },
-      { label: '送检单位', value: ensureValue('机构名称') }
+      { label: '年龄', value: ensureValue('年龄') }
     ],
     [
+      { label: '送检单位', value: ensureValue('机构名称') },
       { label: '送检时间', value: detectionDateValue },
       { label: '科别', value: ensureValue('科别') },
       { label: '癌症标志物', value: ensureValue('癌症标志物') }
@@ -582,6 +582,14 @@ const previewDetailFields = computed<PreviewDetailField[]>(() => {
   }
 
   const fields: PreviewDetailField[] = []
+
+  const detectionResultRows = reportData.value.detectionResultRows ?? []
+  if (detectionResultRows.length) {
+    const formattedLines = detectionResultRows
+      .map(row => row.join('   '))
+      .join('\n')
+    fields.push({ label: '检测结果', value: formattedLines })
+  }
 
   if (reportData.value.totals) {
     fields.push({
@@ -1204,6 +1212,10 @@ defineExpose({
 .report-info-detail {
   display: flex;
   gap: 4px;
+}
+
+.report-info-detail .report-info-value {
+  white-space: pre-wrap;
 }
 
 .report-info-label {
