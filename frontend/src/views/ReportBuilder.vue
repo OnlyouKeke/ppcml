@@ -1029,6 +1029,8 @@ defineExpose({
   border-radius: 20px;
   padding: 24px;
   box-shadow: 0 32px 60px -38px rgba(15, 23, 42, 0.55);
+  border-top: 2px solid #000000;
+  border-bottom: 2px solid #000000;
 }
 
 .report-preview {
