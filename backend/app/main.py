@@ -478,10 +478,6 @@ def _build_report_document(
 
     divider_paragraph = document.add_paragraph()
     divider_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    primary_divider = divider_paragraph.add_run("══════════════════════════════════════════════════════")
-    _apply_run_style(primary_divider, 10, color=RGBColor(0, 0, 0))  # 改为黑色
-    secondary_divider = divider_paragraph.add_run("\n──────────────────────────────────────────────────────")
-    _apply_run_style(secondary_divider, 8, color=RGBColor(75, 85, 99))
     divider_paragraph.paragraph_format.space_after = Pt(6)
 
     report_number_paragraph = document.add_paragraph()
@@ -536,7 +532,7 @@ def _build_report_document(
             ]
         )
 
-        divider_text = "────────────────────────────────────────────────────────"
+        divider_text = "──────────────────────────────────────────────────"
         info_lines = [first_line, second_line, third_line, fourth_line]
 
         info_paragraphs = []
