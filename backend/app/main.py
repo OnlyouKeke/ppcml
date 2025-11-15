@@ -727,7 +727,7 @@ def _build_report_document(
         logo_paragraph = document.add_paragraph()
         logo_run = logo_paragraph.add_run()
         logo_run.add_picture(str(logo_path), width=Inches(1.6))
-        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        logo_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         logo_paragraph.paragraph_format.space_after = Pt(6)
 
 
@@ -742,10 +742,6 @@ def _build_report_document(
     subtitle_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     subtitle_run = subtitle_paragraph.add_run("与免疫荧光识别检测报告单")
     _apply_run_style(subtitle_run, TITLE_FONT_SIZE_PT, bold=True, color=RGBColor(31, 41, 55))
-
-    divider_paragraph = document.add_paragraph()
-    divider_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    divider_paragraph.paragraph_format.space_after = Pt(6)
 
     report_number_paragraph = document.add_paragraph()
     report_number_paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
@@ -971,10 +967,6 @@ def _build_report_document(
         line_paragraph.paragraph_format.space_after = Pt(4 if idx == len(description_lines) - 1 else 0)
 
     biomarker_value = (metadata.get("癌症标志物") or "").strip()
-    biomarker_text = biomarker_value if biomarker_value else "______________"
-    biomarker_paragraph = document.add_paragraph()
-    biomarker_run = biomarker_paragraph.add_run(f"癌症标志物：{biomarker_text}")
-    _apply_run_style(biomarker_run, BODY_FONT_SIZE_PT, color=RGBColor(30, 64, 45))
 
     notes_value = (metadata.get("备注") or "").strip()
     if notes_value:
