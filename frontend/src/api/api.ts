@@ -107,10 +107,11 @@ export const getNextSampleNumber = async (
     params: { petType }
   })
   const sampleNumber = (data as any)?.sampleNumber
-  if (typeof sampleNumber !== 'string') {
-    throw new Error('无效的样本编号响应')
+  const reportNumber = (data as any)?.reportNumber
+  if (typeof sampleNumber !== 'string' || typeof reportNumber !== 'string') {
+    throw new Error('无效的编号响应')
   }
-  return { sampleNumber }
+  return { sampleNumber, reportNumber }
 }
 
 interface CtcReportPayload {
