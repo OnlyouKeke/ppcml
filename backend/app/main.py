@@ -439,11 +439,10 @@ def _set_table_transparent(table) -> None:
 
 
 def _format_channel_summary_texts(analyzer: CTCAnalyzer) -> list[str]:
-    channel_summary_pairs = (
-        ("green_single_channel", analyzer.results.get("green_single_channel", [])),
-        ("white_single_channel", analyzer.results.get("white_single_channel", [])),
-    )
-    return [f"{label} {values}" for label, values in channel_summary_pairs]
+    """Return a simplified summary for channel data."""
+
+    # 需求更新：报告中不再展示原始通道统计数组
+    return []
 
 
 def _generate_result_description(
@@ -473,18 +472,19 @@ def _generate_result_description(
         ctc_cells_per_ml = _format_cells_per_ml(ctc_total, sample_volume_ml)
         wbc_cells_per_ml = _format_cells_per_ml(wbc_total, sample_volume_ml)
         ratio_line = (
-            f"2. 检测CTC数量({ctc_cells_per_ml})cells/ml；"
+            f"检测CTC数量({ctc_cells_per_ml})cells/ml；"
             f"背景白细胞({wbc_cells_per_ml})cells/ml"
         )
     else:
         sample_volume_text = sample_volume_raw if sample_volume_raw else "未填写"
         ratio_line = (
-            f"2. 检测CTC数量({ctc_total}/{sample_volume_text})cells/ml；"
+            f"检测CTC数量({ctc_total}/{sample_volume_text})cells/ml；"
             f"背景白细胞({wbc_total}/{sample_volume_text})cells/ml"
         )
 
     first_line = (
-        f"1. 在一二通道中找到{biomarker_label} {ctc_first_two}个，(CD45+) {wbc_first_two}个。"
+        f"经检测结果判定，在一二通道中找到CD45+ {wbc_first_two}个，"
+        f"({biomarker_label}) {ctc_first_two}个。"
     )
 
     return "结果说明：", [first_line, ratio_line]

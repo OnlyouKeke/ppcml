@@ -104,9 +104,9 @@
                   <el-input
                     v-model="form.sampleNumber"
                     :maxlength="sampleNumberMaxLength"
-                    :disabled="!form.petType"
+                    disabled
                     readonly
-                    placeholder="请选择宠物类型后填写"
+                    placeholder="系统自动生成"
                   />
                 </el-form-item>
               </el-col>
@@ -318,29 +318,26 @@
                     <span class="report-info-value">{{ field.value }}</span>
                   </div>
                 </section>
-                <section v-if="channelPreviewItems.length" class="report-section">
+                <section v-if="channelPreviewRows.length" class="report-section">
                   <h4 class="section-title">通道图像</h4>
-                  <div v-if="channelSummaryTexts.length" class="channel-summary-texts">
-                    <p
-                      v-for="(text, index) in channelSummaryTexts"
-                      :key="`summary-${index}`"
-                      class="channel-summary-text"
-                    >
-                      {{ text }}
-                    </p>
-                  </div>
                   <div class="channel-preview-grid">
                     <div
-                      v-for="item in channelPreviewItems"
-                      :key="item.label"
-                      class="channel-preview-card"
+                      v-for="(row, rowIndex) in channelPreviewRows"
+                      :key="`channel-row-${rowIndex}`"
+                      class="channel-preview-row"
                     >
-                      <div class="channel-preview-label">{{ item.label }}</div>
-                      <img
-                        :src="item.src"
-                        class="channel-preview-image"
-                        :alt="`${item.label}预览图`"
-                      />
+                      <div
+                        v-for="item in row"
+                        :key="item.label"
+                        class="channel-preview-card"
+                      >
+                        <div class="channel-preview-label">{{ item.label }}</div>
+                        <img
+                          :src="item.src"
+                          class="channel-preview-image"
+                          :alt="`${item.label}预览图`"
+                        />
+                      </div>
                     </div>
                   </div>
                 </section>
@@ -494,9 +491,14 @@ const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
   }))
 })
 
-const channelSummaryTexts = computed(
-  () => reportData.value?.channelSummaryTexts ?? []
-)
+const channelPreviewRows = computed<ChannelPreviewItem[][]>(() => {
+  const items = channelPreviewItems.value.slice(0, 4)
+  const rows: ChannelPreviewItem[][] = []
+  for (let index = 0; index < items.length; index += 2) {
+    rows.push(items.slice(index, index + 2))
+  }
+  return rows
+})
 
 const normalizeMetadataValue = (item: ReportMetadataItem) => {
   const value = (item.value ?? '').toString().trim()
@@ -1216,7 +1218,6 @@ defineExpose({
 .report-generated-at,
 .report-info-label,
 .report-info-value,
-.channel-summary-text,
 .channel-preview-label,
 .preview-footer,
 .preview-disclaimer-line {
@@ -1278,13 +1279,6 @@ defineExpose({
   font-weight: 500;
 }
 
-.channel-summary-texts {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
 .channel-preview-label {
   text-align: center;
 }
@@ -1303,9 +1297,15 @@ defineExpose({
 }
 
 .channel-preview-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.channel-preview-row {
   display: grid;
   gap: 18px;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .channel-preview-card {
