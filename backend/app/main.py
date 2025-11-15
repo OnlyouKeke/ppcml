@@ -551,28 +551,20 @@ def _generate_result_description(
     if sample_volume_ml is not None:
         ctc_cells_per_ml = _format_cells_per_ml(ctc_total, sample_volume_ml)
         wbc_cells_per_ml = _format_cells_per_ml(wbc_total, sample_volume_ml)
-        ratio_core = (
-            f"检测CTC数量({ctc_cells_per_ml})cells/ml；"
-            f"背景白细胞({wbc_cells_per_ml})cells/ml"
+        ratio_line = (
+            f"检测CTC数量：{ctc_cells_per_ml} cells/ml；"
+            f"背景白细胞：{wbc_cells_per_ml} cells/ml"
         )
     else:
         sample_volume_text = sample_volume_raw if sample_volume_raw else "未填写"
-        ratio_core = (
-            f"检测CTC数量({ctc_total}/{sample_volume_text})cells/ml；"
-            f"背景白细胞({wbc_total}/{sample_volume_text})cells/ml"
-        )
-
-    formatted_sample_volume = _format_sample_volume(sample_volume_raw)
-    if formatted_sample_volume == "未填写":
-        ratio_line = f"{ratio_core}（该输出受样品量输入影响）"
-    else:
         ratio_line = (
-            f"{ratio_core}（该输出受样品量: {formatted_sample_volume} 输入影响）"
+            f"检测CTC数量：{ctc_total}/{sample_volume_text} cells/ml；"
+            f"背景白细胞：{wbc_total}/{sample_volume_text} cells/ml"
         )
 
     first_line = (
         f"经检测结果判定，在一二通道中找到CD45+ {wbc_first_two}个，"
-        f"({biomarker_label}) {ctc_first_two}个。"
+        f"{biomarker_label}：{ctc_first_two}个。"
     )
 
     return "结果说明：", [first_line, ratio_line]
@@ -1632,11 +1624,8 @@ async def generate_ctc_report(
         result_text_parts = [heading_text, *(description_lines or [])]
         result_text = "\n".join(part for part in result_text_parts if part)
 
-        biomarker_value = (metadata.get("癌症标志物") or "").strip()
-        biomarker_text = biomarker_value if biomarker_value else "______________"
-        remark_lines = [f"癌症标志物：{biomarker_text}"]
-
         notes_value = (metadata.get("备注") or "").strip()
+        remark_lines: list[str] = []
         if notes_value:
             remark_lines.append(f"备注：{notes_value}")
 
