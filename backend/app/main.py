@@ -991,7 +991,7 @@ def _build_report_document(
         _apply_run_style(notes_run, BODY_FONT_SIZE_PT, color=RGBColor(30, 64, 45))
 
     separator = document.add_paragraph()
-    separator_run = separator.add_run("--------------------------------------------------------------------")
+    separator_run = separator.add_run("─────────────────────────────────────────────────")
     _apply_run_style(separator_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
