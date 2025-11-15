@@ -6,7 +6,7 @@ import sys
 
 BASE_DIR = Path(sys.argv[0]).resolve().parent
 BACKEND_DATAS = [
-    (str(BASE_DIR / 'HBI.jpg'), '.'),
+    (str(BASE_DIR / 'HBI.png'), '.'),
     (str(BASE_DIR / 'app' / 'ctc.py'), 'app'),
 ]
 

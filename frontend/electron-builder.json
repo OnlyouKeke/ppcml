@@ -14,21 +14,21 @@
       "to": "fastapi-backend.exe"
     },
     {
-      "from": "../backend/HBI.jpg",
-      "to": "HBI.jpg"
+      "from": "../backend/HBI.png",
+      "to": "HBI.png"
     }
   ],
   "win": {
     "target": ["nsis"],
-    "icon": "public/HBI.jpg"
+    "icon": "public/HBI.png"
   },
   "mac": {
     "target": ["dmg"],
-    "icon": "public/HBI.jpg"
+    "icon": "public/HBI.png"
   },
   "linux": {
     "target": ["AppImage"],
-    "icon": "public/HBI.jpg"
+    "icon": "public/HBI.png"
   },
   "nsis": {
     "oneClick": false,
