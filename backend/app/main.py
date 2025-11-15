@@ -499,14 +499,22 @@ def _format_detection_result_rows(
     if not triplets:
         return []
 
+    display_triplets: list[tuple[str, int, int]] = []
     entries: list[str] = []
     for index, (name, ctc, wbc) in enumerate(triplets):
         normalized_name = (name or "").strip()
         label = normalized_name if normalized_name else f"检测结果{index + 1}"
+        if wbc == 0:
+            continue
+
+        display_triplets.append((label, ctc, wbc))
         entries.append(f"{label}: CD45 {wbc}个，CK {ctc}个")
 
-    combined_wbc = sum(wbc for _, _, wbc in triplets)
-    combined_ctc = sum(ctc for _, ctc, _ in triplets)
+    if not display_triplets:
+        return []
+
+    combined_wbc = sum(wbc for _, _, wbc in display_triplets)
+    combined_ctc = sum(ctc for _, ctc, _ in display_triplets)
     combined_entry = f"合计: CD45 {combined_wbc}个，CK {combined_ctc}个"
 
     rows: list[list[str]] = []
