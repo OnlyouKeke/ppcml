@@ -46,7 +46,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Pt, RGBColor, Inches
+from docx.shared import Pt, RGBColor, Inches, Cm
 import cv2
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -89,7 +89,7 @@ logger = logging.getLogger("ctc_app")
 INLINE_SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/gif"}
 MASK_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
 
-SONGTI_FONT_NAME = "Songti SC"
+SONGTI_FONT_NAME = "SimSun"
 TITLE_FONT_SIZE_PT = 18
 BODY_FONT_SIZE_PT = 11
 
@@ -386,8 +386,7 @@ def _wrap_parentheses(value: str | None) -> str:
 
 
 def _wrap_ascii_parentheses(value: str | None, *, fallback: str = "未填写") -> str:
-    normalized = _ensure_value(value, fallback)
-    return f"({normalized})"
+    return _ensure_value(value, fallback)
 
 
 def _format_checkbox_line(label: str, value: str | None, options: list[str]) -> str:
@@ -440,6 +439,13 @@ def _build_report_document(
     mask_options: list[dict] | None = None,
 ) -> None:
     document = Document()
+
+    for section in document.sections:
+        section.top_margin = Cm(1.27)
+        section.bottom_margin = Cm(1.27)
+        section.left_margin = Cm(1.27)
+        section.right_margin = Cm(1.27)
+        section.gutter = Cm(0)
     # 修改logo路径查找逻辑，使其在打包后也能正确找到logo文件
     logo_path = Path(__file__).resolve().parent.parent / "HBI.jpg"
     
