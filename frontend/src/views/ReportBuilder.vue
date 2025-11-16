@@ -329,16 +329,36 @@
                       <div
                         v-for="item in row"
                         :key="item.label"
-                        class="channel-preview-card"
+                        :class="[
+                          'channel-preview-card',
+                          { 'channel-preview-card--placeholder': !item.src }
+                        ]"
                       >
                         <div class="channel-preview-label">{{ item.label }}</div>
-                        <img
-                          :src="item.src"
-                          class="channel-preview-image"
-                          :alt="`${item.label}预览图`"
-                        />
+                        <div
+                          v-if="item.description"
+                          class="channel-preview-description"
+                        >
+                          {{ item.description }}
+                        </div>
+                        <div class="channel-preview-image-wrapper">
+                          <img
+                            v-if="item.src"
+                            :src="item.src"
+                            class="channel-preview-image"
+                            :alt="`${item.label}预览图`"
+                          />
+                          <div v-else class="channel-preview-placeholder">
+                            {{ item.placeholderText || '暂无预览' }}
+                          </div>
+                        </div>
                       </div>
                     </div>
+                  </div>
+                  <div v-if="overlayGenerationError" class="channel-overlay-error">
+                    <el-alert type="error" :closable="false" show-icon>
+                      {{ overlayGenerationError }}
+                    </el-alert>
                   </div>
                 </section>
                 <div class="preview-disclaimer">
@@ -408,6 +428,9 @@ type FileWithRelativePath = File & { webkitRelativePath?: string }
 interface ChannelPreviewItem {
   label: string
   src: string
+  description?: string
+  placeholderText?: string
+  isOverlay?: boolean
 }
 
 interface PreviewLineField {
@@ -442,6 +465,10 @@ const previewWarnings = ref<string[]>([])
 const maskOptions = ref<ReportMaskOption[]>([])
 const maskSelectionOrderMap = ref(new Map<string, number>())
 const maskDirectoryPath = ref('')
+const overlayImageSrc = ref('')
+const overlayGenerationError = ref('')
+const isOverlayGenerating = ref(false)
+let overlayGenerationToken = 0
 
 const form = reactive({
   ownerName: '',
@@ -484,12 +511,47 @@ const canDownloadReport = computed(
 
 const hasReport = computed(() => Boolean(reportData.value))
 
-const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
+const defaultChannelPreviewItems = computed<ChannelPreviewItem[]>(() => {
   const items = reportData.value?.imageSet?.items ?? []
   return items.map(item => ({
     label: item.label,
     src: `data:${item.mimeType};base64,${item.data}`
   }))
+})
+
+const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
+  if (isMaskSelectionComplete.value) {
+    const baseItems = selectedMaskOptions.value.map((option, index) => ({
+      label: `图像${index + 1}`,
+      description: option.label,
+      src: `data:${option.mimeType};base64,${option.data}`
+    }))
+
+    const overlayPlaceholderText =
+      overlayGenerationError.value ||
+      (isOverlayGenerating.value ? '叠加图像生成中...' : '叠加图像待生成')
+
+    if (overlayImageSrc.value) {
+      baseItems.push({
+        label: '叠加合并',
+        description: '由所选图像叠加生成',
+        src: overlayImageSrc.value,
+        isOverlay: true
+      })
+    } else {
+      baseItems.push({
+        label: '叠加合并',
+        description: '由所选图像叠加生成',
+        src: '',
+        isOverlay: true,
+        placeholderText: overlayPlaceholderText
+      })
+    }
+
+    return baseItems
+  }
+
+  return defaultChannelPreviewItems.value
 })
 
 const channelPreviewRows = computed<ChannelPreviewItem[][]>(() => {
@@ -651,6 +713,10 @@ const formatGeneratedAt = (value: string) => {
 
 const resetMaskSelection = () => {
   maskSelectionOrderMap.value = new Map<string, number>()
+  overlayImageSrc.value = ''
+  overlayGenerationError.value = ''
+  isOverlayGenerating.value = false
+  overlayGenerationToken += 1
 }
 
 const assignSampleNumber = (sampleValue: string, reportValue?: string) => {
@@ -763,6 +829,137 @@ watch(
       }
     }
   }
+)
+
+const buildMaskDataUri = (option: ReportMaskOption) => {
+  const mimeType = (option.mimeType || '').trim() || 'image/png'
+  const data = (option.data || '').trim()
+  if (!data) {
+    throw new Error('所选图像数据无效')
+  }
+  return `data:${mimeType};base64,${data}`
+}
+
+const loadImageElement = (source: string) =>
+  new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('无法加载图像资源'))
+    image.src = source
+  })
+
+const getImagePixelData = (
+  image: HTMLImageElement,
+  width: number,
+  height: number
+) => {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) {
+    throw new Error('无法创建画布上下文')
+  }
+  context.drawImage(image, 0, 0, width, height)
+  return context.getImageData(0, 0, width, height)
+}
+
+const mergeImageSourcesToDataUrl = async (sources: string[]) => {
+  if (!sources.length) {
+    throw new Error('缺少可用于叠加的图像')
+  }
+
+  const images = await Promise.all(sources.map(loadImageElement))
+  const base = images[0]
+  const width = base.naturalWidth || base.width
+  const height = base.naturalHeight || base.height
+
+  if (!width || !height) {
+    throw new Error('图像尺寸无效')
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) {
+    throw new Error('无法创建画布上下文')
+  }
+
+  const pixelArrays = images.map(image => getImagePixelData(image, width, height).data)
+  const outputImageData = context.createImageData(width, height)
+  const output = outputImageData.data
+  const layerCount = pixelArrays.length
+
+  for (let index = 0; index < output.length; index += 4) {
+    let red = 0
+    let green = 0
+    let blue = 0
+    let alpha = 0
+
+    for (const pixels of pixelArrays) {
+      red += pixels[index]
+      green += pixels[index + 1]
+      blue += pixels[index + 2]
+      alpha += pixels[index + 3]
+    }
+
+    output[index] = Math.min(255, Math.round(red / layerCount))
+    output[index + 1] = Math.min(255, Math.round(green / layerCount))
+    output[index + 2] = Math.min(255, Math.round(blue / layerCount))
+    output[index + 3] = Math.min(255, Math.round(alpha / layerCount))
+  }
+
+  context.putImageData(outputImageData, 0, 0)
+  return canvas.toDataURL('image/png')
+}
+
+const generateOverlayFromSelectedOptions = async (
+  options: ReportMaskOption[]
+) => {
+  const sources = options.map(buildMaskDataUri)
+  return mergeImageSourcesToDataUrl(sources)
+}
+
+watch(
+  selectedMaskOptions,
+  options => {
+    overlayGenerationToken += 1
+    const currentToken = overlayGenerationToken
+    overlayImageSrc.value = ''
+    overlayGenerationError.value = ''
+
+    if (options.length !== requiredMaskSelectionCount) {
+      isOverlayGenerating.value = false
+      return
+    }
+
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    isOverlayGenerating.value = true
+
+    ;(async () => {
+      try {
+        const merged = await generateOverlayFromSelectedOptions(options)
+        if (overlayGenerationToken === currentToken) {
+          overlayImageSrc.value = merged
+        }
+      } catch (error) {
+        if (overlayGenerationToken === currentToken) {
+          overlayGenerationError.value =
+            error instanceof Error ? error.message : '叠加图像生成失败'
+        }
+      } finally {
+        if (overlayGenerationToken === currentToken) {
+          isOverlayGenerating.value = false
+        }
+      }
+    })()
+  },
+  { deep: true }
 )
 
 const toggleMaskSelection = (id: string) => {
@@ -1307,20 +1504,52 @@ defineExpose({
 .channel-preview-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 16px;
   border-radius: 14px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
 }
 
-.channel-preview-image {
+.channel-preview-card--placeholder {
+  background: #f8fafc;
+}
+
+.channel-preview-description {
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.channel-preview-image-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
+  min-height: 180px;
   border-radius: 12px;
   background: #ffffff;
   border: 1px dashed rgba(148, 163, 184, 0.6);
   padding: 8px;
+}
+
+.channel-preview-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
   object-fit: contain;
+}
+
+.channel-preview-placeholder {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.channel-overlay-error {
+  margin-top: 12px;
 }
 
 .preview-actions {
