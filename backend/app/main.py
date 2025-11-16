@@ -611,6 +611,17 @@ def _format_detection_result_rows(
     return rows
 
 
+def _format_channel_label_prefix(sub_folder: str | None) -> str:
+    """Format the label prefix for channel previews using folder information."""
+
+    normalized = (sub_folder or "").strip()
+    if not normalized:
+        return "X通道"
+    if normalized.endswith("通道"):
+        return normalized
+    return f"{normalized}通道"
+
+
 def _wrap_parentheses(value: str | None) -> str:
     if not value:
         return "（未填写）"
@@ -854,6 +865,9 @@ def _build_report_document(
     ctc_image_sets = analyzer.results.get("ctc_image_sets", [])
     if ctc_image_sets:
         image_set = ctc_image_sets[0]
+        channel_label_prefix = _format_channel_label_prefix(
+            image_set.get("sub_folder")
+        )
 
         for summary_text in channel_summary_texts or []:
             if not summary_text:
@@ -907,17 +921,23 @@ def _build_report_document(
             labels_and_paths = list(selected_labels_and_paths)
         else:
             labels_and_paths = [
-                ("图像1：蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
-                ("图像2：绿色通道", _resolve_preview_path("green_path", "green_original")),
-                ("图像3：红色通道", _resolve_preview_path("red_path", "red_original")),
+                (
+                    f"{channel_label_prefix}蓝色信号",
+                    _resolve_preview_path("blue_path", "blue_original"),
+                ),
+                (
+                    f"{channel_label_prefix}绿色信号",
+                    _resolve_preview_path("green_path", "green_original"),
+                ),
+                (
+                    f"{channel_label_prefix}红色信号",
+                    _resolve_preview_path("red_path", "red_original"),
+                ),
             ]
 
             if mask_override_path:
                 detail_label = mask_override_label or "掩码图像"
-                labels_and_paths[2] = (
-                    f"图像3：{detail_label}",
-                    mask_override_path,
-                )
+                labels_and_paths[2] = (detail_label, mask_override_path)
 
         if overlay_preview:
             labels_and_paths.append(("叠加合并", overlay_preview))
@@ -1605,6 +1625,9 @@ async def generate_ctc_report(
         image_set_payload: dict | None = None
         if ctc_image_sets:
             first_set = ctc_image_sets[0]
+            channel_label_prefix = _format_channel_label_prefix(
+                first_set.get("sub_folder")
+            )
 
             def _resolve_image(primary_key: str, *fallback_keys: str) -> Path | None:
                 keys = (primary_key,) + fallback_keys
@@ -1617,10 +1640,10 @@ async def generate_ctc_report(
                 return None
 
             images_payload = []
-            for label, keys in (
-                ("蓝色通道", ("blue_path", "blue_original")),
-                ("绿色通道", ("green_path", "green_original")),
-                ("红色通道", ("red_path", "red_original")),
+            for suffix, keys in (
+                ("蓝色信号", ("blue_path", "blue_original")),
+                ("绿色信号", ("green_path", "green_original")),
+                ("红色信号", ("red_path", "red_original")),
                 ("叠加通道", ("overlay_path", "overlay_original")),
             ):
                 image_path = _resolve_image(*keys)
@@ -1630,6 +1653,11 @@ async def generate_ctc_report(
                 if not encoded_preview:
                     continue
                 mime_type, encoded_data = encoded_preview
+                label = (
+                    f"{channel_label_prefix}{suffix}"
+                    if suffix != "叠加通道"
+                    else suffix
+                )
                 images_payload.append(
                     {
                         "label": label,
