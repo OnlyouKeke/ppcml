@@ -30,6 +30,7 @@ if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
 
 import base64
 import json
+import math
 import shutil
 import io
 import mimetypes
@@ -880,7 +881,14 @@ def _build_report_document(
                         "所选掩码图像不存在或不可访问：%s", candidate_path
                     )
                     continue
-                label = option.get("label") or f"掩码图像 {index + 1}"
+
+                detail_label = option.get("label") or option.get("channel") or "掩码图像"
+                normalized_detail = str(detail_label).strip()
+                base_label = f"图像{index + 1}"
+                if normalized_detail:
+                    label = f"{base_label}：{normalized_detail}"
+                else:
+                    label = base_label
                 selected_labels_and_paths.append((label, candidate_path))
 
         mask_override_path: str | None = None
@@ -899,19 +907,20 @@ def _build_report_document(
             labels_and_paths = list(selected_labels_and_paths)
         else:
             labels_and_paths = [
-                ("蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
-                ("绿色通道", _resolve_preview_path("green_path", "green_original")),
-                ("红色通道", _resolve_preview_path("red_path", "red_original")),
+                ("图像1：蓝色通道", _resolve_preview_path("blue_path", "blue_original")),
+                ("图像2：绿色通道", _resolve_preview_path("green_path", "green_original")),
+                ("图像3：红色通道", _resolve_preview_path("red_path", "red_original")),
             ]
 
             if mask_override_path:
+                detail_label = mask_override_label or "掩码图像"
                 labels_and_paths[2] = (
-                    mask_override_label or "掩码图像",
+                    f"图像3：{detail_label}",
                     mask_override_path,
                 )
 
         if overlay_preview:
-            labels_and_paths.append(("叠加通道", overlay_preview))
+            labels_and_paths.append(("叠加合并", overlay_preview))
 
         valid_items = [
             (label, path)
@@ -920,25 +929,45 @@ def _build_report_document(
         ]
 
         if valid_items:
-            column_count = len(valid_items)
-            image_table = document.add_table(rows=2, cols=column_count)
+            column_count = 2 if len(valid_items) > 2 else len(valid_items)
+            column_count = max(column_count, 1)
+            row_groups = math.ceil(len(valid_items) / column_count)
+            image_table = document.add_table(rows=row_groups * 2, cols=column_count)
             image_table.autofit = True
             image_table.style = None
             _set_table_transparent(image_table)
 
-            first_row = image_table.rows[0]
-            second_row = image_table.rows[1]
-
             for idx, (label, path) in enumerate(valid_items):
-                cell = first_row.cells[idx]
-                paragraph = cell.paragraphs[0]
-                run = paragraph.add_run()
-                run.add_picture(path, width=Inches(2.0))
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                group_index = idx // column_count
+                column_index = idx % column_count
+                image_row_index = group_index * 2
+                label_row_index = image_row_index + 1
 
-                label_cell = second_row.cells[idx]
+                image_row = image_table.rows[image_row_index]
+                label_row = image_table.rows[label_row_index]
+
+                image_cell = image_row.cells[column_index]
+                image_paragraph = image_cell.paragraphs[0]
+                image_run = image_paragraph.add_run()
+                image_run.add_picture(path, width=Inches(2.0))
+                image_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+                label_cell = label_row.cells[column_index]
                 _set_cell_text(label_cell, label, bold=True, color=RGBColor(31, 41, 55))
                 label_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # 清空未使用的单元格，避免残留默认段落
+            total_slots = row_groups * column_count
+            if total_slots > len(valid_items):
+                for empty_idx in range(len(valid_items), total_slots):
+                    group_index = empty_idx // column_count
+                    column_index = empty_idx % column_count
+                    image_row_index = group_index * 2
+                    label_row_index = image_row_index + 1
+                    image_cell = image_table.rows[image_row_index].cells[column_index]
+                    image_cell.text = ""
+                    label_cell = image_table.rows[label_row_index].cells[column_index]
+                    label_cell.text = ""
         else:
             no_image_paragraph = document.add_paragraph()
             no_image_run = no_image_paragraph.add_run("当前未检测到可用于展示的CTC图像。")
