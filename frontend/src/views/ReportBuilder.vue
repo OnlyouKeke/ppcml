@@ -514,6 +514,66 @@ const hasReport = computed(() => Boolean(reportData.value))
 const fallbackChannelLabelPrefix = 'X通道'
 const channelSignalSuffixes = ['绿色信号', '红色信号', '蓝色信号'] as const
 
+type ChannelColor = 'green' | 'red' | 'blue'
+
+const channelColorConfigs: Record<ChannelColor, { label: string }> = {
+  green: { label: '绿色信号' },
+  red: { label: '红色信号' },
+  blue: { label: '蓝色信号' }
+}
+
+const normalizeMaskSourceName = (value: string | undefined | null) => {
+  if (!value) {
+    return ''
+  }
+  const normalizedSeparators = value.replace(/\\/g, '/').split('/')
+  const lastSegment = normalizedSeparators[normalizedSeparators.length - 1] || value
+  const withoutLabelPrefix = lastSegment.split('：').pop() ?? lastSegment
+  const withoutColonPrefix = withoutLabelPrefix.split(':').pop() ?? withoutLabelPrefix
+  return withoutColonPrefix.trim().toLowerCase()
+}
+
+const detectChannelColorFromText = (value: string | undefined | null): ChannelColor | null => {
+  const normalized = normalizeMaskSourceName(value)
+  if (!normalized) {
+    return null
+  }
+  const withoutOverlay = normalized.replace(/_overlay/gi, '')
+  const withoutExtension = withoutOverlay.replace(/\.[^.]+$/, '')
+  if (!withoutExtension) {
+    return null
+  }
+  const lastChar = withoutExtension.slice(-1)
+  if (lastChar === 'g') {
+    return 'green'
+  }
+  if (lastChar === 'r') {
+    return 'red'
+  }
+  if (lastChar === 'b') {
+    return 'blue'
+  }
+  return null
+}
+
+const detectChannelColorFromOption = (option: ReportMaskOption): ChannelColor | null => {
+  for (const source of [option.relativePath, option.label, option.id]) {
+    const detected = detectChannelColorFromText(source)
+    if (detected) {
+      return detected
+    }
+  }
+  return null
+}
+
+const resolveChannelLabelForOption = (option: ReportMaskOption, index: number) => {
+  const detectedColor = detectChannelColorFromOption(option)
+  if (detectedColor) {
+    return `${channelLabelPrefix.value}${channelColorConfigs[detectedColor].label}`
+  }
+  return `${channelLabelPrefix.value}通道图像 ${index + 1}`
+}
+
 const channelLabelPrefix = computed(() => {
   const raw = reportData.value?.channelLabelPrefix ?? ''
   const normalized = raw.trim()
@@ -534,10 +594,9 @@ const defaultChannelPreviewItems = computed<ChannelPreviewItem[]>(() => {
 
 const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
   if (isMaskSelectionComplete.value) {
-    const labels = channelSignalLabels.value
     const baseItems = selectedMaskOptions.value.map((option, index) => ({
-      label: labels[index] ?? `图像${index + 1}`,
-      src: `data:${option.mimeType};base64,${option.data}`
+      label: resolveChannelLabelForOption(option, index),
+      src: buildMaskDataUri(option)
     }))
 
     const overlayPlaceholderText =
