@@ -96,6 +96,11 @@ TITLE_FONT_SIZE_PT = 18
 BODY_FONT_SIZE_PT = 11
 
 CHANNEL_SIGNAL_SUFFIXES = ("绿色信号", "红色信号", "蓝色信号")
+CHANNEL_SUFFIX_LABEL_MAP = {
+    "g": "绿色信号",
+    "r": "红色信号",
+    "b": "蓝色信号",
+}
 
 SAMPLE_NUMBER_STORAGE_DIR = Path(__file__).resolve().parent.parent / "var"
 SAMPLE_NUMBER_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -121,6 +126,43 @@ DISCLAIMER_LINES = [
     "建议结合兽医临床表现、影像学及其他实验室检查综合判断。",
     "检测人____________                审核人____________                签字/盖章____________",
 ]
+
+
+def _normalize_mask_source_name(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = str(value).strip()
+    if not normalized:
+        return ""
+    normalized = normalized.replace("\\", "/")
+    last_segment = normalized.split("/")[-1]
+    label_split = last_segment.split("：")[-1]
+    colon_split = label_split.split(":")[-1]
+    return colon_split.strip().casefold()
+
+
+def _detect_channel_suffix(value: str | None) -> str | None:
+    normalized = _normalize_mask_source_name(value)
+    if not normalized:
+        return None
+    normalized = normalized.replace("_overlay", "")
+    if "." in normalized:
+        normalized = normalized.rsplit(".", 1)[0]
+    normalized = normalized.strip()
+    if not normalized:
+        return None
+    suffix = normalized[-1]
+    if suffix in CHANNEL_SUFFIX_LABEL_MAP:
+        return suffix
+    return None
+
+
+def _resolve_channel_label_from_suffix(
+    prefix: str, suffix: str | None, fallback_label: str
+) -> str:
+    if suffix and suffix in CHANNEL_SUFFIX_LABEL_MAP:
+        return f"{prefix}{CHANNEL_SUFFIX_LABEL_MAP[suffix]}"
+    return fallback_label
 
 
 def _normalize_pet_type(value: str | None) -> str:
@@ -892,7 +934,7 @@ def _build_report_document(
                     return candidate
             return None
 
-        selected_labels_and_paths: list[tuple[str, str]] = []
+        selected_labels_and_paths: list[tuple[str, str, str | None]] = []
 
         if mask_options:
             for index, option in enumerate(mask_options):
@@ -910,7 +952,12 @@ def _build_report_document(
                     label = f"{base_label}：{normalized_detail}"
                 else:
                     label = base_label
-                selected_labels_and_paths.append((label, candidate_path))
+                color_suffix = (
+                    _detect_channel_suffix(option.get("label"))
+                    or _detect_channel_suffix(option.get("path"))
+                    or _detect_channel_suffix(option.get("relativePath"))
+                )
+                selected_labels_and_paths.append((label, candidate_path, color_suffix))
 
         mask_override_path: str | None = None
         mask_override_label: str | None = None
@@ -926,11 +973,17 @@ def _build_report_document(
 
         if selected_labels_and_paths:
             labels_and_paths = []
-            for index, (_, path) in enumerate(selected_labels_and_paths):
-                label = (
+            for index, (detail_label, path, color_suffix) in enumerate(
+                selected_labels_and_paths
+            ):
+                default_label = (
                     channel_signal_labels[index]
                     if index < len(channel_signal_labels)
-                    else f"{channel_label_prefix}通道图像 {index + 1}"
+                    else detail_label
+                    or f"{channel_label_prefix}通道图像 {index + 1}"
+                )
+                label = _resolve_channel_label_from_suffix(
+                    channel_label_prefix, color_suffix, default_label
                 )
                 labels_and_paths.append((label, path))
         else:
