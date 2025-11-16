@@ -511,6 +511,19 @@ const canDownloadReport = computed(
 
 const hasReport = computed(() => Boolean(reportData.value))
 
+const fallbackChannelLabelPrefix = 'X通道'
+const channelSignalSuffixes = ['绿色信号', '红色信号', '蓝色信号'] as const
+
+const channelLabelPrefix = computed(() => {
+  const raw = reportData.value?.channelLabelPrefix ?? ''
+  const normalized = raw.trim()
+  return normalized || fallbackChannelLabelPrefix
+})
+
+const channelSignalLabels = computed(() =>
+  channelSignalSuffixes.map(suffix => `${channelLabelPrefix.value}${suffix}`)
+)
+
 const defaultChannelPreviewItems = computed<ChannelPreviewItem[]>(() => {
   const items = reportData.value?.imageSet?.items ?? []
   return items.map(item => ({
@@ -521,9 +534,9 @@ const defaultChannelPreviewItems = computed<ChannelPreviewItem[]>(() => {
 
 const channelPreviewItems = computed<ChannelPreviewItem[]>(() => {
   if (isMaskSelectionComplete.value) {
+    const labels = channelSignalLabels.value
     const baseItems = selectedMaskOptions.value.map((option, index) => ({
-      label: `图像${index + 1}`,
-      description: option.label,
+      label: labels[index] ?? `图像${index + 1}`,
       src: `data:${option.mimeType};base64,${option.data}`
     }))
 

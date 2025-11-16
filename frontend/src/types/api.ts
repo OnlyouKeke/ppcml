@@ -56,6 +56,7 @@ export interface CtcReportResponse {
   hasCtcImages: boolean
   imageSet?: ReportImageSet | null
   channelSummaryTexts?: string[]
+  channelLabelPrefix?: string
   warnings?: string[]
   reportToken?: string
   maskOptions?: ReportMaskOption[]
