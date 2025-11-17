@@ -50,6 +50,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor, Inches, Cm
 import cv2
+import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -424,6 +425,83 @@ def _encode_preview_image(image_path: Path) -> tuple[str, str] | None:
     except Exception:
         logger.exception("处理预览图像时出现错误：%s", image_path)
         return None
+
+
+def _merge_mask_image_arrays(mask_paths: Iterable[Path]) -> np.ndarray | None:
+    """Merge multiple mask images into a single RGB array."""
+
+    prepared_images: list[np.ndarray] = []
+    target_size: tuple[int, int] | None = None
+
+    for path in mask_paths:
+        image = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        if image is None:
+            logger.warning("无法读取掩码图像用于叠加：%s", path)
+            continue
+
+        height, width = image.shape[:2]
+        if height == 0 or width == 0:
+            logger.warning("掩码图像尺寸无效：%s", path)
+            continue
+
+        if target_size is None:
+            target_size = (width, height)
+        elif (width, height) != target_size:
+            image = cv2.resize(image, target_size, interpolation=cv2.INTER_LINEAR)
+
+        if image.ndim == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        elif image.ndim == 3 and image.shape[2] == 1:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        elif image.ndim == 3 and image.shape[2] == 4:
+            image = cv2.cvtColor(image, cv2.COLOR_BGRA2BGR)
+
+        prepared_images.append(image.astype(np.float32))
+
+    if not prepared_images:
+        return None
+
+    stacked = np.stack(prepared_images, axis=0)
+    merged = np.clip(np.mean(stacked, axis=0), 0, 255)
+    return merged.astype(np.uint8)
+
+
+def _prepare_mask_overlay(mask_options: list[dict], working_dir: Path) -> str | None:
+    """Generate an overlay image from selected mask options."""
+
+    mask_paths: list[Path] = []
+    for option in mask_options:
+        candidate_path = option.get("path")
+        if not candidate_path:
+            continue
+        path_obj = Path(candidate_path)
+        if not path_obj.exists():
+            logger.warning("所选掩码图像不存在，无法参与叠加：%s", candidate_path)
+            continue
+        mask_paths.append(path_obj)
+
+    if len(mask_paths) < 2:
+        return None
+
+    merged_image = _merge_mask_image_arrays(mask_paths)
+    if merged_image is None:
+        return None
+
+    overlay_dir = working_dir / "generated_overlays"
+    try:
+        overlay_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        logger.warning("无法创建叠加图像目录：%s (%s)", overlay_dir, exc)
+        return None
+
+    overlay_name = datetime.now().strftime("selected_mask_overlay_%Y%m%d%H%M%S.png")
+    overlay_path = overlay_dir / overlay_name
+    success = cv2.imwrite(str(overlay_path), merged_image)
+    if not success:
+        logger.warning("掩码叠加图像写入失败：%s", overlay_path)
+        return None
+
+    return str(overlay_path)
 
 
 def _apply_run_style(run, size: int, bold: bool = False, color: RGBColor | None = None) -> None:
@@ -964,6 +1042,11 @@ def _build_report_document(
                 logger.warning("指定的掩码图像不存在或不可访问：%s", candidate_path)
 
         overlay_preview = _resolve_preview_path("overlay_path", "overlay_original")
+
+        if mask_options:
+            generated_overlay = _prepare_mask_overlay(mask_options, output_path.parent)
+            if generated_overlay:
+                overlay_preview = generated_overlay
 
         if selected_labels_and_paths:
             labels_and_paths = []
