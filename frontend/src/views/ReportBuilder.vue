@@ -37,11 +37,20 @@
               </el-col>
               <el-col :xs="24" :sm="12">
                 <el-form-item label="宠物类型">
-                  <el-radio-group v-model="form.petType">
-                    <el-radio label="猫">猫</el-radio>
-                    <el-radio label="狗">狗</el-radio>
-                    <el-radio label="其他">其他</el-radio>
-                  </el-radio-group>
+                  <div class="pet-type-field">
+                    <el-radio-group v-model="form.petType">
+                      <el-radio label="猫">猫</el-radio>
+                      <el-radio label="狗">狗</el-radio>
+                      <el-radio label="其他">其他</el-radio>
+                    </el-radio-group>
+                    <el-input
+                      v-if="form.petType === '其他'"
+                      v-model="form.customPetTypeName"
+                      placeholder="请输入具体宠物类型"
+                      clearable
+                      class="pet-type-custom-input"
+                    />
+                  </div>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -475,6 +484,7 @@ const form = reactive({
   petName: '',
   gender: '',
   petType: '',
+  customPetTypeName: '',
   age: '',
   institutionName: '',
   detectionDate: '',
@@ -803,6 +813,13 @@ const clearSampleNumber = () => {
   form.reportNumber = ''
 }
 
+const resolvedPetTypeDisplay = computed(() => {
+  if (form.petType === '其他') {
+    return form.customPetTypeName.trim() || form.petType
+  }
+  return form.petType
+})
+
 const resolveFolderName = (files: FileWithRelativePath[]) => {
   if (!files.length) {
     return ''
@@ -864,6 +881,10 @@ const extractErrorMessage = (error: unknown) => {
 watch(
   () => form.petType,
   async (newPetType, oldPetType) => {
+    if (newPetType !== '其他') {
+      form.customPetTypeName = ''
+    }
+
     const normalizedNew = (newPetType || '').trim()
     const normalizedOld = (oldPetType || '').trim()
 
@@ -1078,6 +1099,7 @@ const runDetection = async () => {
         sampleVolume: form.sampleVolume,
         sampleStatus: form.sampleStatus,
         petType: form.petType,
+        petTypeDisplay: resolvedPetTypeDisplay.value,
         cancerBiomarker: form.cancerBiomarker,
         department: form.department,
         petName: form.petName,
@@ -1174,6 +1196,7 @@ const resetAll = () => {
   form.petName = ''
   form.gender = ''
   form.petType = ''
+  form.customPetTypeName = ''
   form.age = ''
   form.institutionName = ''
   form.detectionDate = ''
@@ -1238,6 +1261,16 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.pet-type-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pet-type-custom-input {
+  max-width: 260px;
 }
 
 @media (min-width: 1280px) {

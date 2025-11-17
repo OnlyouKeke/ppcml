@@ -1514,6 +1514,7 @@ async def generate_ctc_report(
     sample_volume: str = Form("", alias="sampleVolume"),
     sample_status: str = Form("", alias="sampleStatus"),
     pet_type: str = Form("", alias="petType"),
+    pet_type_display: str = Form("", alias="petTypeDisplay"),
     cancer_biomarker: str = Form("", alias="cancerBiomarker"),
     department: str = Form("", alias="department"),
     pet_name: str = Form("", alias="petName"),
@@ -1620,6 +1621,8 @@ async def generate_ctc_report(
             normalized_report_number = _generate_next_report_number()
             generated_report_number = normalized_report_number
 
+        resolved_pet_type_display = pet_type_display.strip() or normalized_pet_type_value or pet_type
+
         metadata = _create_metadata_entries(
             institution_name,
             normalized_report_number,
@@ -1627,7 +1630,7 @@ async def generate_ctc_report(
             sanitized_sample_number,
             sample_volume,
             sample_status,
-            normalized_pet_type_value or pet_type,
+            resolved_pet_type_display,
             cancer_biomarker,
             department,
             pet_name,
