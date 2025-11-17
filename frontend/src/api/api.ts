@@ -124,6 +124,7 @@ interface CtcReportPayload {
     sampleVolume: string
     sampleStatus: string
     petType: string
+    petTypeDisplay?: string
     cancerBiomarker: string
     department: string
     petName: string
@@ -177,6 +178,7 @@ export const postGenerateCtcReport = async ({
   formData.append('sampleVolume', form.sampleVolume || '')
   formData.append('sampleStatus', form.sampleStatus || '')
   formData.append('petType', form.petType || '')
+  formData.append('petTypeDisplay', form.petTypeDisplay || '')
   formData.append('cancerBiomarker', form.cancerBiomarker || '')
   formData.append('department', form.department || '')
   formData.append('sampleType', form.sampleType || '')
