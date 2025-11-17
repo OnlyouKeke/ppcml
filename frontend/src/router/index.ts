@@ -21,7 +21,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  document.title = `${to.meta.title || '宠物检测报告'} - Electron + FastAPI + Vue3`
+  document.title = `${to.meta.title || 'HBI_BIOCHIP_SYSTEM'}`
   next()
 })
 

@@ -1170,6 +1170,7 @@ def _build_report_document(
     _apply_run_style(separator_run, BODY_FONT_SIZE_PT, color=RGBColor(75, 85, 99))
     separator.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    
 
     for index, line in enumerate(DISCLAIMER_LINES):
         disclaimer_paragraph = document.add_paragraph()
@@ -1178,7 +1179,7 @@ def _build_report_document(
         disclaimer_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         disclaimer_run = disclaimer_paragraph.add_run(line)
         _apply_run_style(disclaimer_run, BODY_FONT_SIZE_PT, color=RGBColor(107, 114, 128))
-
+        
     document.save(output_path)
 
 
