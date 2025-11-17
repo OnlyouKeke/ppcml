@@ -4,7 +4,7 @@
 cd backend
 使用PyInstaller打包FastAPI后端
 
-终端已运行
+
 pyinstaller fastapi-backend.spec
 查看当前目录内容
 
@@ -21,18 +21,4 @@ pyinstaller fastapi-backend.spec
 pwd
 切换到backend目录并打包
 
-终端已运行
-cd backend; pyinstaller fastapi-backend.spec
-修复fastapi-backend.spec文件中的问题
-
-‎fastapi-backend.spec
-4/0
-已过期
-再次尝试打包FastAPI后端
-
-终端已运行
-cd backend; pyinstaller fastapi-backend.spec
-a
-aliyun4012166869
-前天 02:11
-fastapi-backend.spec
+npm run electron:build
