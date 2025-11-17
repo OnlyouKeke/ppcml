@@ -1251,6 +1251,11 @@ defineExpose({
   .form-card {
     grid-column: 1 / -1;
   }
+
+  .mask-card,
+  .preview-card {
+    grid-column: 1 / -1;
+  }
 }
 
 .card-title {
