@@ -6,7 +6,7 @@ const routes: Array<RouteRecordRaw> = [
     name: 'report',
     component: () => import('../views/ReportBuilder.vue'),
     meta: {
-      title: '宠物检测报告'
+      title: 'HBI_BIOCHIP_SYSTEM'
     }
   },
   {

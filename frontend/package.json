@@ -2,7 +2,7 @@
   "name": "electron-fastapi-vue",
   "private": true,
   "version": "1.0.0",
-  "description": "Electron + Vue + FastAPI 应用",
+  "description": "HBI_BIOCHIP_SYSTEM",
   "author": "Your Name",
   "type": "commonjs",
   "main": "dist/electron/main.js",
