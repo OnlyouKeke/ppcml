@@ -632,15 +632,9 @@ def _format_detection_result_rows(
         if wbc == 0:
             continue
 
-        display_triplets.append((label, ctc, wbc))
-        entries.append(f"{label}: CD45 {wbc}个，CK {ctc}个")
-
+    
     if not display_triplets:
         return []
-
-    combined_wbc = sum(wbc for _, _, wbc in display_triplets)
-    combined_ctc = sum(ctc for _, ctc, _ in display_triplets)
-    combined_entry = f"合计: CD45 {combined_wbc}个，CK {combined_ctc}个"
 
     rows: list[list[str]] = []
     first_row_items = entries[:2]
